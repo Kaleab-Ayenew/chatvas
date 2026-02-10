@@ -21,11 +21,11 @@
 
 | Platform | Format | Link |
 |----------|--------|------|
-| Windows  | `.exe` installer | [Latest Release](https://github.com/kaleab-ayenew/chat-nodes-canvas/releases/latest) |
-| macOS    | `.dmg` (Intel + Apple Silicon) | [Latest Release](https://github.com/kaleab-ayenew/chat-nodes-canvas/releases/latest) |
-| Linux    | `.AppImage` / `.deb` | [Latest Release](https://github.com/kaleab-ayenew/chat-nodes-canvas/releases/latest) |
+| Windows  | `.exe` installer | [Latest Release](https://github.com/kaleab-ayenew/chatvas/releases/latest) |
+| macOS    | `.dmg` (Intel + Apple Silicon) | [Latest Release](https://github.com/kaleab-ayenew/chatvas/releases/latest) |
+| Linux    | `.AppImage` / `.deb` | [Latest Release](https://github.com/kaleab-ayenew/chatvas/releases/latest) |
 
-Or visit the [Releases page](https://github.com/kaleab-ayenew/chat-nodes-canvas/releases) for all versions.
+Or visit the [Releases page](https://github.com/kaleab-ayenew/chatvas/releases) for all versions.
 
 ## Development
 
@@ -38,7 +38,7 @@ Or visit the [Releases page](https://github.com/kaleab-ayenew/chat-nodes-canvas/
 
 ```bash
 # Clone the repo
-git clone https://github.com/kaleab-ayenew/chat-nodes-canvas.git
+git clone https://github.com/kaleab-ayenew/chatvas.git
 cd chat-nodes-canvas
 
 # Install dependencies

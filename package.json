@@ -2,12 +2,12 @@
   "name": "chat-nodes-canvas",
   "version": "1.0.0",
   "description": "Infinite canvas for AI chatbot conversation branching",
-  "author": "Chat Nodes Canvas Contributors",
+  "author": "Kaleab Ayenew kalishayish16@gmail.com",
   "license": "MIT",
-  "homepage": "https://github.com/kaleab-ayenew/chat-nodes-canvas",
+  "homepage": "https://github.com/kaleab-ayenew/chatvas",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kaleab-ayenew/chat-nodes-canvas.git"
+    "url": "https://github.com/kaleab-ayenew/chatvas.git"
   },
   "main": "./out/main/index.js",
   "scripts": {
