@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat Nodes Canvas — Infinite Canvas for AI Conversation Branching</title>
+  <meta name="description" content="Branch, explore, and visualize your ChatGPT conversations on an infinite canvas. Free and open source desktop app for Windows, macOS, and Linux." />
+  <meta property="og:title" content="Chat Nodes Canvas" />
+  <meta property="og:description" content="Infinite canvas for AI chatbot conversation branching" />
+  <meta property="og:image" content="images/og-preview.png" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/png" href="images/favicon.png" />
+  <style>
+    /* ========================================
+       CSS RESET & BASE
+       ======================================== */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #08080f;
+      --bg-subtle: #0e0e1a;
+      --bg-card: #13132a;
+      --bg-card-hover: #1a1a36;
+      --surface: #1e1e3a;
+      --border: #2a2a4a;
+      --text: #e8e8f0;
+      --text-secondary: #9898b8;
+      --text-muted: #6868a0;
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.3);
+      --accent-subtle: rgba(99, 102, 241, 0.08);
+      --gradient-start: #6366f1;
+      --gradient-end: #a855f7;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --radius-xs: 6px;
+      --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.5);
+      --shadow-glow: 0 0 80px rgba(99, 102, 241, 0.15);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--accent-light); text-decoration: none; transition: color 0.2s; }
+    a:hover { color: #c4b5fd; }
+
+    img { max-width: 100%; height: auto; display: block; }
+
+    /* ========================================
+       UTILITIES
+       ======================================== */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    .section {
+      padding: 120px 0;
+      position: relative;
+    }
+
+    .section-label {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent-light);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    .section-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-secondary);
+      max-width: 600px;
+      line-height: 1.7;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ========================================
+       BACKGROUND EFFECTS
+       ======================================== */
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      background-image:
+        radial-gradient(circle at 1px 1px, rgba(99, 102, 241, 0.06) 1px, transparent 0);
+      background-size: 40px 40px;
+    }
+
+    .bg-glow {
+      position: fixed;
+      z-index: -1;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .bg-glow--hero {
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.25), transparent 70%);
+    }
+
+    .bg-glow--features {
+      top: 50%;
+      right: -200px;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.15), transparent 70%);
+    }
+
+    /* ========================================
+       HEADER / NAV
+       ======================================== */
+    .header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 16px 0;
+      transition: background 0.3s, backdrop-filter 0.3s;
+    }
+
+    .header.scrolled {
+      background: rgba(8, 8, 15, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text);
+    }
+
+    .logo img {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-cta {
+      padding: 8px 20px;
+      background: var(--accent);
+      color: #fff !important;
+      border-radius: var(--radius-xs);
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    .nav-cta:hover {
+      background: var(--accent-light);
+      transform: translateY(-1px);
+      color: #fff !important;
+    }
+
+    .mobile-menu-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    /* ========================================
+       HERO SECTION
+       ======================================== */
+    .hero {
+      padding: 180px 0 100px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: var(--accent-subtle);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      border-radius: 100px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--accent-light);
+      margin-bottom: 28px;
+    }
+
+    .hero-badge .dot {
+      width: 6px;
+      height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .hero h1 {
+      font-size: clamp(2.8rem, 6vw, 4.5rem);
+      font-weight: 800;
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+      margin-bottom: 24px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .hero-subtitle {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      max-width: 560px;
+      margin: 0 auto 48px;
+      line-height: 1.7;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 72px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.25s;
+      border: none;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+      color: #fff;
+      box-shadow: 0 4px 24px var(--accent-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(99, 102, 241, 0.4);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent);
+      transform: translateY(-2px);
+      color: var(--text);
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Hero screenshot */
+    .hero-screenshot {
+      position: relative;
+      max-width: 1000px;
+      margin: 0 auto;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg), var(--shadow-glow);
+      border: 1px solid var(--border);
+    }
+
+    .hero-screenshot img {
+      width: 100%;
+      display: block;
+    }
+
+    .hero-screenshot::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--radius);
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), transparent 50%, rgba(168, 85, 247, 0.3));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    /* ========================================
+       FEATURES SECTION
+       ======================================== */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 64px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 28px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--gradient-start), var(--gradient-end));
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .feature-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(99, 102, 241, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .feature-card:hover::before { opacity: 1; }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      background: var(--accent-subtle);
+      border: 1px solid rgba(99, 102, 241, 0.15);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      font-size: 22px;
+    }
+
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      line-height: 1.65;
+    }
+
+    /* ========================================
+       HOW IT WORKS
+       ======================================== */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 48px;
+      margin-top: 64px;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 36px;
+      left: calc(16.66% + 24px);
+      right: calc(16.66% + 24px);
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--border), var(--accent));
+      opacity: 0.3;
+    }
+
+    .step {
+      text-align: center;
+      position: relative;
+    }
+
+    .step-number {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--accent-light);
+      margin: 0 auto 24px;
+      position: relative;
+      z-index: 1;
+      transition: all 0.3s;
+    }
+
+    .step:hover .step-number {
+      border-color: var(--accent);
+      box-shadow: 0 0 24px var(--accent-glow);
+    }
+
+    .step h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .step p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+    }
+
+    /* Step screenshot thumbnails */
+    .step-image {
+      margin-top: 24px;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+
+    .step-image img {
+      width: 100%;
+      display: block;
+    }
+
+    /* ========================================
+       DOWNLOAD SECTION
+       ======================================== */
+    .download {
+      text-align: center;
+    }
+
+    .download-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-top: 64px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .download-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 28px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    .download-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(99, 102, 241, 0.3);
+      transform: translateY(-4px);
+    }
+
+    .download-icon {
+      margin-bottom: 20px;
+    }
+
+    .download-icon svg {
+      width: 48px;
+      height: 48px;
+      color: var(--text-secondary);
+    }
+
+    .download-card h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .download-card .format {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 24px;
+    }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-xs);
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .download-btn:hover {
+      background: var(--accent-light);
+      transform: translateY(-1px);
+      color: #fff;
+    }
+
+    .download-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .download-note {
+      margin-top: 32px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .download-note a {
+      color: var(--accent-light);
+    }
+
+    /* ========================================
+       FOOTER
+       ======================================== */
+    .footer {
+      padding: 48px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .footer-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .footer-left img {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+    }
+
+    .footer-links a {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    .footer-links a:hover { color: var(--text); }
+
+    /* ========================================
+       RESPONSIVE
+       ======================================== */
+    @media (max-width: 768px) {
+      .section { padding: 80px 0; }
+      .hero { padding: 140px 0 60px; }
+
+      .nav-links { display: none; }
+      .mobile-menu-btn { display: block; }
+
+      .features-grid,
+      .download-cards,
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+
+      .steps::before { display: none; }
+
+      .hero-actions { flex-direction: column; }
+      .hero-actions .btn { width: 100%; justify-content: center; }
+
+      .footer-content {
+        flex-direction: column;
+        gap: 16px;
+      }
+    }
+
+    @media (max-width: 1024px) and (min-width: 769px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .download-cards { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    /* ========================================
+       ANIMATIONS
+       ======================================== */
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate {
+      opacity: 0;
+      animation: fade-up 0.7s ease forwards;
+    }
+
+    .animate-delay-1 { animation-delay: 0.1s; }
+    .animate-delay-2 { animation-delay: 0.2s; }
+    .animate-delay-3 { animation-delay: 0.3s; }
+    .animate-delay-4 { animation-delay: 0.4s; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- Background effects -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow bg-glow--hero"></div>
+  <div class="bg-glow bg-glow--features"></div>
+
+  <!-- ============ HEADER ============ -->
+  <header class="header" id="header">
+    <div class="container">
+      <a href="#" class="logo">
+        <!-- IMAGE: logo icon -->
+        <img src="images/icon.png" alt="Chat Nodes Canvas" />
+        Chat Nodes Canvas
+      </a>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how-it-works">How It Works</a></li>
+          <li><a href="#download">Download</a></li>
+          <li><a href="https://github.com/kaleab-ayenew/chat-nodes-canvas" class="nav-cta">GitHub</a></li>
+        </ul>
+      </nav>
+      <button class="mobile-menu-btn" aria-label="Menu" onclick="document.querySelector('.nav-links').classList.toggle('show')">&#9776;</button>
+    </div>
+  </header>
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="hero">
+    <div class="container">
+      <div class="hero-badge animate">
+        <span class="dot"></span>
+        Open Source &amp; Free
+      </div>
+
+      <h1 class="animate animate-delay-1">
+        Branch your AI chats<br />on an <span class="gradient-text">infinite canvas</span>
+      </h1>
+
+      <p class="hero-subtitle animate animate-delay-2">
+        Explore multiple conversation paths simultaneously. Branch, compare, and visualize your ChatGPT dialogues like never before.
+      </p>
+
+      <div class="hero-actions animate animate-delay-3">
+        <a href="#download" class="btn btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Now
+        </a>
+        <a href="https://github.com/kaleab-ayenew/chat-nodes-canvas" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+
+      <!-- IMAGE: hero-screenshot.png — Main app screenshot showing the canvas with multiple branching chat nodes -->
+      <div class="hero-screenshot animate animate-delay-4">
+        <img src="images/hero-screenshot.png" alt="Chat Nodes Canvas — Multiple ChatGPT conversations branching on an infinite canvas" />
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-label">Features</div>
+      <h2 class="section-title">Everything you need for<br /><span class="gradient-text">conversation exploration</span></h2>
+      <p class="section-subtitle">A purpose-built desktop app that transforms how you interact with AI conversations.</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+          </div>
+          <h3>Infinite Canvas</h3>
+          <p>Pan, zoom, and navigate freely across an unlimited workspace. Your conversations have no boundaries.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" stroke-width="2"><path d="M6 3v12"/><path d="M18 9a3 3 0 100-6 3 3 0 000 6z"/><path d="M6 21a3 3 0 100-6 3 3 0 000 6z"/><path d="M15 6a9 9 0 00-9 9"/><path d="M18 15v6"/><path d="M21 18h-6"/></svg>
+          </div>
+          <h3>Auto Branching</h3>
+          <p>When ChatGPT opens a new chat branch, it automatically becomes a new node on your canvas — connected visually.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3>Real ChatGPT Inside</h3>
+          <p>Each node embeds a full ChatGPT session. Use your own account, with all features — plugins, GPTs, everything.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <h3>Visual Connections</h3>
+          <p>Animated edges show the relationship between parent and branched conversations. See your thought process at a glance.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          </div>
+          <h3>5 Beautiful Themes</h3>
+          <p>Switch between Midnight, Nord, Ros&eacute; Pine, Solarized Dark, and Light. One click to change the vibe.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          </div>
+          <h3>Cross Platform</h3>
+          <p>Runs natively on Windows, macOS, and Linux. Same great experience everywhere.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW IT WORKS ============ -->
+  <section class="section" id="how-it-works" style="background: var(--bg-subtle);">
+    <div class="container">
+      <div style="text-align: center;">
+        <div class="section-label">How It Works</div>
+        <h2 class="section-title">Up and running in <span class="gradient-text">seconds</span></h2>
+        <p class="section-subtitle" style="margin: 0 auto;">No setup, no API keys, no configuration. Just download, open, and start branching.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Open the App</h3>
+          <p>Launch Chat Nodes Canvas. A ChatGPT node is ready for you on the canvas.</p>
+          <!-- IMAGE: step-1.png — Screenshot of the app just opened, showing a single ChatGPT node on the canvas -->
+          <div class="step-image">
+            <img src="images/step-1.png" alt="Step 1: Open the app" />
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Chat &amp; Branch</h3>
+          <p>Use ChatGPT normally. When you branch a conversation, a new node appears automatically.</p>
+          <!-- IMAGE: step-2.png — Screenshot showing a branch being created, with two connected nodes -->
+          <div class="step-image">
+            <img src="images/step-2.png" alt="Step 2: Branch conversations" />
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Explore &amp; Compare</h3>
+          <p>Zoom out to see your full conversation tree. Compare branches side-by-side.</p>
+          <!-- IMAGE: step-3.png — Screenshot of a zoomed-out canvas showing a full conversation tree with many branches -->
+          <div class="step-image">
+            <img src="images/step-3.png" alt="Step 3: Explore your conversation tree" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DOWNLOAD ============ -->
+  <section class="section download" id="download">
+    <div class="container">
+      <div class="section-label">Download</div>
+      <h2 class="section-title">Get Chat Nodes Canvas</h2>
+      <p class="section-subtitle" style="margin: 0 auto;">Free and open source. Available for all major platforms.</p>
+
+      <div class="download-cards">
+        <!-- Windows -->
+        <div class="download-card">
+          <div class="download-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+          </div>
+          <h3>Windows</h3>
+          <div class="format">.exe installer</div>
+          <a href="https://github.com/kaleab-ayenew/chat-nodes-canvas/releases/latest" class="download-btn" id="download-win">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+          </a>
+        </div>
+
+        <!-- macOS -->
+        <div class="download-card">
+          <div class="download-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          </div>
+          <h3>macOS</h3>
+          <div class="format">.dmg (Intel + Apple Silicon)</div>
+          <a href="https://github.com/kaleab-ayenew/chat-nodes-canvas/releases/latest" class="download-btn" id="download-mac">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+          </a>
+        </div>
+
+        <!-- Linux -->
+        <div class="download-card">
+          <div class="download-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.3 1.953-1.05 3.02-.885 1.051-2.127 2.75-2.716 4.521-.278.832-.41 1.684-.287 2.489a.424.424 0 00-.11.135c-.26.268-.45.6-.663.839-.199.199-.485.267-.797.4-.313.136-.658.269-.864.68-.09.189-.136.394-.132.602 0 .199.027.4.055.536.058.399.116.728.04.97-.249.68-.28 1.145-.106 1.484.174.334.535.47.94.601.81.2 1.91.135 2.774.6.926.466 1.866.67 2.616.47.526-.116.97-.464 1.208-.946.587-.003 1.23-.269 2.26-.334.699-.058 1.574.267 2.577.2.025.134.063.198.114.333l.003.003c.391.778 1.113 1.368 1.884 1.43.558.045 1.143-.244 1.458-.609.039-.045.08-.086.117-.13.141.07.259.133.488.166.146.037.334.024.517-.062.39-.202.515-.664.489-1.14-.037-.642-.224-1.323-.121-2.044.117-.655.264-1.601.364-2.457.044-.399.04-.8-.062-1.185-.108-.39-.3-.756-.583-1.088-.577-.675-1.449-1.306-2.29-2.065-.886-.796-1.613-1.52-1.827-2.428-.105-.55-.033-1.074.155-1.584.178-.468.37-.964.493-1.476.113-.46.125-.89.032-1.294-.095-.404-.29-.76-.556-1.058-.612-.695-1.582-1.008-2.612-.883-1.153.149-1.883 1.03-2.337 1.876-.316.57-.398 1.22-.317 1.865.071.555.316 1.077.57 1.575.246.467.468.942.574 1.406.087.37.076.73-.043 1.08-.113.333-.33.632-.6.897-.527.534-1.17.925-1.625 1.407-.459.485-.726 1.048-.684 1.726.012.22.02.438-.003.653a7.163 7.163 0 01-.164.95c-.108.433-.237.867-.237 1.415 0 .1 0 .199.01.297a2.4 2.4 0 00.085.458c.133.41.356.723.7.893.34.164.718.161 1.072.098.705-.114 1.35-.546 1.612-.944.081-.12.118-.247.09-.367-.027-.117-.114-.213-.235-.222-.125-.01-.265.06-.38.147-.058.043-.128.083-.206.109-.075.022-.16.031-.25.012a.413.413 0 01-.2-.12.505.505 0 01-.103-.256c-.015-.108 0-.22.018-.34.04-.23.094-.476.163-.722.148-.509.27-1.01.283-1.616.012-.23-.005-.46-.052-.68a3.003 3.003 0 00-.247-.735c-.277-.522-.667-.906-1.027-1.28-.346-.363-.693-.74-.879-1.161-.075-.177-.119-.356-.12-.548.001-.165.072-.346.204-.554.264-.42.662-.748 1.072-1.133.4-.385.833-.816 1.133-1.37.304-.568.47-1.233.37-2.006a5.35 5.35 0 00-.453-1.597 3.82 3.82 0 01-.25-.626c-.056-.2-.084-.413-.066-.616.02-.198.079-.396.21-.554.125-.151.313-.265.574-.294.3-.036.585.03.853.174.268.144.5.357.712.59.205.223.345.46.429.713.08.25.108.51.08.78-.06.446-.254.889-.44 1.342-.189.454-.395.933-.518 1.455-.074.307-.123.62-.123.943 0 .387.083.767.268 1.112.186.344.476.647.814.92.66.531 1.488 1.008 2.137 1.592.616.56 1.03 1.128 1.063 1.925.015.321-.073.65-.185.937-.115.29-.268.548-.459.793a5.12 5.12 0 01-.753.705c-.305.233-.663.454-.976.731a.89.89 0 00-.31.631c0 .171.056.344.138.49l.006.01c.106.187.264.323.439.414.352.18.775.17 1.12.003.347-.17.612-.49.74-.841.162-.454.082-.993-.186-1.498-.25-.468-.668-.823-1.104-1.185-.416-.346-.85-.714-1.12-1.123a2.52 2.52 0 01-.36-1.2c-.004-.316.075-.635.196-.934.12-.298.29-.564.498-.805.218-.255.45-.494.667-.756.221-.271.427-.564.584-.892.098-.207.17-.42.215-.642.042-.217.063-.44.06-.663-.007-.492-.119-.967-.329-1.397a5.74 5.74 0 00-.8-1.145c.071-.003.136-.015.2-.027.64-.122 1.178-.417 1.633-.727a6.22 6.22 0 001.092-.918c.303-.312.519-.628.621-.95.038-.12.066-.24.083-.36.018-.124.024-.25.018-.377a2.37 2.37 0 00-.203-.865c-.166-.35-.414-.628-.704-.85-.29-.224-.622-.395-.978-.52-.355-.124-.73-.2-1.105-.225-.748-.05-1.497.117-2.1.468-.647.375-1.104.918-1.323 1.608-.098.307-.1.536-.1.672v.003z"/></svg>
+          </div>
+          <h3>Linux</h3>
+          <div class="format">.AppImage / .deb</div>
+          <a href="https://github.com/kaleab-ayenew/chat-nodes-canvas/releases/latest" class="download-btn" id="download-linux">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+          </a>
+        </div>
+      </div>
+
+      <p class="download-note">
+        Or browse all releases on <a href="https://github.com/kaleab-ayenew/chat-nodes-canvas/releases">GitHub Releases</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-left">
+          <img src="images/icon.png" alt="" />
+          Chat Nodes Canvas &middot; MIT License
+        </div>
+        <ul class="footer-links">
+          <li><a href="https://github.com/kaleab-ayenew/chat-nodes-canvas">GitHub</a></li>
+          <li><a href="https://github.com/kaleab-ayenew/chat-nodes-canvas/releases">Releases</a></li>
+          <li><a href="https://github.com/kaleab-ayenew/chat-nodes-canvas/issues">Issues</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============ SCRIPTS ============ -->
+  <script>
+    // Sticky header background on scroll
+    const header = document.getElementById('header');
+    window.addEventListener('scroll', () => {
+      header.classList.toggle('scrolled', window.scrollY > 40);
+    });
+
+    // Intersection Observer for scroll animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.animationPlayState = 'running';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.feature-card, .step, .download-card').forEach(el => {
+      el.style.opacity = '0';
+      el.style.animation = 'fade-up 0.6s ease forwards';
+      el.style.animationPlayState = 'paused';
+      observer.observe(el);
+    });
+  </script>
+
+</body>
+</html>
