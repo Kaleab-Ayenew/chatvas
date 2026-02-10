@@ -3,6 +3,11 @@
 > Infinite canvas for AI chatbot conversation branching
 
 <p align="center">
+  <video src="https://github.com/Kaleab-Ayenew/demo_vids/raw/main/chatvas_4x.mp4" width="800" controls style="max-width: 100%; border-radius: 12px;"></video>
+</p>
+<p align="center"><sub><a href="https://github.com/Kaleab-Ayenew/demo_vids/blob/main/chatvas_4x.mp4">Watch full video on GitHub</a></sub></p>
+
+<p align="center">
   <img src="docs/images/hero-screenshot.png" alt="Chat Nodes Canvas" width="800" />
 </p>
 

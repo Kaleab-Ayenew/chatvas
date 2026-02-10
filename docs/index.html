@@ -328,6 +328,22 @@
     }
 
     /* Hero screenshot */
+    .hero-video {
+      position: relative;
+      max-width: 1000px;
+      margin: 0 auto;
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg), var(--shadow-glow);
+      border: 1px solid var(--border);
+    }
+
+    .hero-video video {
+      width: 100%;
+      display: block;
+      background: var(--bg-card);
+    }
+
     .hero-screenshot {
       position: relative;
       max-width: 1000px;
@@ -741,8 +757,13 @@
         </a>
       </div>
 
-      <!-- IMAGE: hero-screenshot.png — Main app screenshot showing the canvas with multiple branching chat nodes -->
-      <div class="hero-screenshot animate animate-delay-4">
+      <!-- Demo video -->
+      <div class="hero-video animate animate-delay-4">
+        <video src="https://github.com/Kaleab-Ayenew/demo_vids/raw/main/chatvas_4x.mp4" controls playsinline preload="metadata" poster="images/hero-screenshot.png">
+          Your browser does not support the video tag. <a href="https://github.com/Kaleab-Ayenew/demo_vids/blob/main/chatvas_4x.mp4">Watch the demo on GitHub</a>.
+        </video>
+      </div>
+      <div class="hero-screenshot animate animate-delay-4" style="margin-top: 1.5rem;">
         <img src="images/hero-screenshot.png" alt="Chat Nodes Canvas — Multiple ChatGPT conversations branching on an infinite canvas" />
       </div>
     </div>
