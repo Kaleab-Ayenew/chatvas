@@ -3,6 +3,10 @@
 > Infinite canvas for AI chatbot conversation branching
 
 <p align="center">
+  <a href="https://www.producthunt.com/products/chatvas?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-chatvas" target="_blank" rel="noopener noreferrer"><img alt="Chatvas - An infinite canvas for ChatGPT branches  | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1077449&amp;theme=light&amp;t=1770972278819"></a>
+</p>
+
+<p align="center">
   <video src="https://github.com/Kaleab-Ayenew/demo_vids/raw/main/chatvas_4x.mp4" width="800" controls autoplay muted loop playsinline style="max-width: 100%; border-radius: 12px;"></video>
 </p>
 <p align="center"><sub><a href="https://github.com/Kaleab-Ayenew/demo_vids/blob/main/chatvas_4x.mp4">Watch full video on GitHub</a></sub></p>
