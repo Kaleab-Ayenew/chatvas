@@ -947,6 +947,116 @@
 
   <!-- ============ SCRIPTS ============ -->
   <script>
+    // Website analytics configuration.
+    // Set these values before deploy:
+    // window.CHATVAS_ANALYTICS = {
+    //   posthogKey: 'phc_xxx',
+    //   posthogHost: 'https://us.i.posthog.com'
+    // };
+    window.CHATVAS_ANALYTICS = window.CHATVAS_ANALYTICS || {};
+
+    const websiteAnalyticsEnabled = Boolean(window.CHATVAS_ANALYTICS.posthogKey);
+    const websiteAnalyticsHost = window.CHATVAS_ANALYTICS.posthogHost || 'https://us.i.posthog.com';
+    const websiteDistinctIdKey = 'chatvas.website.distinct_id';
+    let websiteDistinctId = localStorage.getItem(websiteDistinctIdKey);
+    if (!websiteDistinctId) {
+      websiteDistinctId = (window.crypto?.randomUUID?.() || `chatvas-site-${Date.now()}`);
+      localStorage.setItem(websiteDistinctIdKey, websiteDistinctId);
+    }
+
+    const trackWebsiteEvent = (event, properties = {}) => {
+      if (!websiteAnalyticsEnabled) return;
+      fetch(`${websiteAnalyticsHost}/capture/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: window.CHATVAS_ANALYTICS.posthogKey,
+          event,
+          distinct_id: websiteDistinctId,
+          properties: {
+            ...properties,
+            page: window.location.pathname,
+            referrer: document.referrer
+          },
+          timestamp: new Date().toISOString()
+        }),
+        keepalive: true
+      }).catch(() => {});
+    };
+
+    trackWebsiteEvent('website_page_view');
+
+    const DOWNLOAD_FALLBACK_URL = 'https://github.com/kaleab-ayenew/chatvas/releases/latest';
+    const DOWNLOAD_RELEASE_API = 'https://api.github.com/repos/kaleab-ayenew/chatvas/releases/latest';
+
+    const findBestAssetForPlatform = (assets, platform) => {
+      const byName = (asset) => asset?.name?.toLowerCase() || '';
+
+      if (platform === 'win') {
+        return assets.find((asset) => byName(asset).endsWith('.exe'));
+      }
+
+      if (platform === 'mac') {
+        return assets.find((asset) => byName(asset).endsWith('.dmg'));
+      }
+
+      if (platform === 'linux') {
+        return (
+          assets.find((asset) => byName(asset).endsWith('.appimage')) ||
+          assets.find((asset) => byName(asset).endsWith('.deb'))
+        );
+      }
+
+      return null;
+    };
+
+    const assignLatestReleaseDownloads = async () => {
+      try {
+        const response = await fetch(DOWNLOAD_RELEASE_API, {
+          headers: {
+            Accept: 'application/vnd.github+json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`GitHub API request failed with status ${response.status}`);
+        }
+
+        const release = await response.json();
+        const assets = Array.isArray(release.assets) ? release.assets : [];
+
+        document.querySelectorAll('[id^="download-"]').forEach((el) => {
+          const platform = el.id.replace('download-', '');
+          const asset = findBestAssetForPlatform(assets, platform);
+          el.href = asset?.browser_download_url || DOWNLOAD_FALLBACK_URL;
+        });
+      } catch {
+        document.querySelectorAll('[id^="download-"]').forEach((el) => {
+          el.href = DOWNLOAD_FALLBACK_URL;
+        });
+      }
+    };
+
+    assignLatestReleaseDownloads();
+
+    document.querySelectorAll('[id^="download-"]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const platform = el.id.replace('download-', '');
+        trackWebsiteEvent('website_download_clicked', {
+          platform,
+          destination: el.href
+        });
+      });
+    });
+
+    document.querySelectorAll('a[href*="github.com/kaleab-ayenew/chatvas"]').forEach((el) => {
+      el.addEventListener('click', () => {
+        trackWebsiteEvent('website_outbound_click', {
+          destination: el.href
+        });
+      });
+    });
+
     // Sticky header background on scroll
     const header = document.getElementById('header');
     window.addEventListener('scroll', () => {
