@@ -596,6 +596,13 @@
       height: 16px;
     }
 
+    .download-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
     .download-note {
       margin-top: 32px;
       font-size: 0.9rem;
@@ -915,10 +922,16 @@
           </div>
           <h3>Linux</h3>
           <div class="format">.AppImage / .deb</div>
-          <a href="https://github.com/kaleab-ayenew/chatvas/releases/latest" class="download-btn" id="download-linux">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download
-          </a>
+          <div class="download-actions">
+            <a href="https://github.com/kaleab-ayenew/chatvas/releases/latest" class="download-btn" id="download-linux-appimage">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download AppImage
+            </a>
+            <a href="https://github.com/kaleab-ayenew/chatvas/releases/latest" class="download-btn" id="download-linux-deb">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download .deb
+            </a>
+          </div>
         </div>
       </div>
 
@@ -1003,11 +1016,16 @@
         return assets.find((asset) => byName(asset).endsWith('.dmg'));
       }
 
+      if (platform === 'linux-appimage') {
+        return assets.find((asset) => byName(asset).endsWith('.appimage'));
+      }
+
+      if (platform === 'linux-deb') {
+        return assets.find((asset) => byName(asset).endsWith('.deb'));
+      }
+
       if (platform === 'linux') {
-        return (
-          assets.find((asset) => byName(asset).endsWith('.appimage')) ||
-          assets.find((asset) => byName(asset).endsWith('.deb'))
-        );
+        return assets.find((asset) => byName(asset).endsWith('.appimage'));
       }
 
       return null;
