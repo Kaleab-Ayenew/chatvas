@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import './ChatNode.css'
+import { trackEvent } from '../analytics'
 
 function ChatNode({ id, data }) {
   const webviewRef = useRef(null)
@@ -36,6 +37,12 @@ function ChatNode({ id, data }) {
 
     const onDidNavigate = (event) => {
       if (event.url) setCurrentUrl(event.url)
+      if (event.url) {
+        trackEvent('webview_navigated', {
+          node_id: id,
+          destination_url: event.url
+        })
+      }
     }
 
     // Direct interception of new-window requests from the webview.
@@ -44,6 +51,10 @@ function ChatNode({ id, data }) {
     const onNewWindow = (event) => {
       const url = event.url
       if (url && data.onBranch) {
+        trackEvent('branch_requested', {
+          node_id: id,
+          target_url: url
+        })
         data.onBranch(url, id)
       }
     }

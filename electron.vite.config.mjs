@@ -10,6 +10,9 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
+    define: {
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.npm_package_version || 'dev')
+    },
     resolve: {
       alias: {
         '@': resolve('src/renderer/src')

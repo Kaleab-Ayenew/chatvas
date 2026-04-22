@@ -10,6 +10,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import ChatNode from './components/ChatNode'
 import themes from './themes'
+import { analyticsStatus, trackEvent } from './analytics'
 
 let nodeIdCounter = 1
 const getNextNodeId = () => `node-${++nodeIdCounter}`
@@ -27,6 +28,17 @@ function App() {
   // --- Theme state ---
   const [themeName, setThemeName] = useState('midnight')
   const theme = themes[themeName]
+
+  useEffect(() => {
+    const { enabled, host } = analyticsStatus()
+    if (!enabled) return
+
+    trackEvent('app_opened', {
+      platform: navigator.platform,
+      user_agent: navigator.userAgent,
+      host
+    })
+  }, [])
 
   // Apply theme CSS vars to :root whenever theme changes
   useEffect(() => {
@@ -93,6 +105,7 @@ function App() {
       unregisterWebview(nodeId)
       setNodes((nds) => nds.filter((n) => n.id !== nodeId))
       setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
+      trackEvent('node_closed', { node_id: nodeId })
     },
     [unregisterWebview, setNodes, setEdges]
   )
@@ -102,6 +115,7 @@ function App() {
   const handleBranch = useCallback(
     (url, sourceNodeId) => {
       const newId = getNextNodeId()
+      const isBranch = Boolean(sourceNodeId)
 
       setNodes((currentNodes) => {
         const sourceNode = currentNodes.find((n) => n.id === sourceNodeId)
@@ -142,6 +156,12 @@ function App() {
           }
         ])
       }
+
+      trackEvent(isBranch ? 'branch_created' : 'node_created', {
+        node_id: newId,
+        source_node_id: sourceNodeId || null,
+        source_url: url
+      })
 
       return newId
     },
@@ -188,6 +208,11 @@ function App() {
         dragHandle: '.chat-node-header'
       }
     ])
+    trackEvent('node_created', {
+      node_id: newId,
+      source_node_id: null,
+      source_url: 'https://chatgpt.com'
+    })
   }, [registerWebview, unregisterWebview, onBranchStable, onCloseStable, setNodes])
 
   // --- Delete nodes via keyboard ---
@@ -213,7 +238,10 @@ function App() {
               key={key}
               className={`theme-swatch ${themeName === key ? 'active' : ''}`}
               style={{ background: swatchColors[key] }}
-              onClick={() => setThemeName(key)}
+              onClick={() => {
+                setThemeName(key)
+                trackEvent('theme_changed', { theme: key })
+              }}
               title={t.label}
             />
           ))}

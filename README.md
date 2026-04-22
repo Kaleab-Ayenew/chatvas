@@ -87,6 +87,55 @@ npm run dist:linux
 3. When a webview tries to open a new window (e.g., "Branch in new chat"), the app intercepts it and creates a new node on the canvas instead, connected to the source node with an animated edge.
 4. Webview-to-node mapping is maintained so branches always connect to the correct parent.
 
+## Analytics Setup (App + Website)
+
+Chatvas includes built-in analytics event tracking using PostHog's capture API.
+
+### 1) App analytics (Electron renderer)
+
+Create a `.env` file in the project root:
+
+```bash
+VITE_POSTHOG_KEY=phc_your_project_key
+VITE_POSTHOG_HOST=https://us.i.posthog.com
+```
+
+Tracked app events include:
+
+- `app_opened`
+- `node_created`
+- `branch_requested`
+- `branch_created`
+- `node_closed`
+- `theme_changed`
+- `webview_navigated`
+
+### 2) Website analytics (`docs/index.html`)
+
+In `docs/index.html`, set:
+
+```html
+<script>
+  window.CHATVAS_ANALYTICS = {
+    posthogKey: 'phc_your_project_key',
+    posthogHost: 'https://us.i.posthog.com'
+  };
+</script>
+```
+
+Tracked website events include:
+
+- `website_page_view`
+- `website_download_clicked` (with `platform`)
+- `website_outbound_click`
+
+### 3) Download counts
+
+Use GitHub release asset download counts as your source of truth for installer downloads:
+
+- [Latest release downloads](https://github.com/kaleab-ayenew/chatvas/releases/latest)
+- [All releases](https://github.com/kaleab-ayenew/chatvas/releases)
+
 ## Creating a Release
 
 Releases are automated via GitHub Actions. To create a new release:

@@ -953,7 +953,10 @@
     //   posthogKey: 'phc_xxx',
     //   posthogHost: 'https://us.i.posthog.com'
     // };
-    window.CHATVAS_ANALYTICS = window.CHATVAS_ANALYTICS || {};
+    window.CHATVAS_ANALYTICS = {
+      posthogKey: 'phc_noZ8SBLH8Jqgh7N5EgNi2ipUGifhuMqKHyCfgWcUofm9',
+      posthogHost: 'https://us.i.posthog.com'
+    };
 
     const websiteAnalyticsEnabled = Boolean(window.CHATVAS_ANALYTICS.posthogKey);
     const websiteAnalyticsHost = window.CHATVAS_ANALYTICS.posthogHost || 'https://us.i.posthog.com';
