@@ -1,6 +1,6 @@
 .chat-node {
-  width: 620px;
-  height: 750px;
+  width: 100%;
+  height: 100%;
   background: var(--bg-node);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -172,4 +172,13 @@
 
 .chat-handle:hover {
   background: var(--accent-glow) !important;
+}
+
+.chat-node-resize-line {
+  border-color: var(--accent) !important;
+}
+
+.chat-node-resize-handle {
+  background: var(--accent) !important;
+  border-color: var(--bg-node) !important;
 }

@@ -14,6 +14,7 @@ import { analyticsStatus, trackEvent } from './analytics'
 
 let nodeIdCounter = 1
 const getNextNodeId = () => `node-${++nodeIdCounter}`
+const defaultNodeSize = { width: 620, height: 750 }
 
 // Swatch preview colors (the canvas bg for each theme)
 const swatchColors = {
@@ -92,6 +93,7 @@ function App() {
         onBranch: (url, sourceNodeId) => handleBranchRef.current?.(url, sourceNodeId),
         onClose: (nodeId) => handleCloseRef.current?.(nodeId)
       },
+      style: defaultNodeSize,
       dragHandle: '.chat-node-header'
     }
   ])
@@ -139,6 +141,7 @@ function App() {
               onBranch: onBranchStable,
               onClose: onCloseStable
             },
+            style: defaultNodeSize,
             dragHandle: '.chat-node-header'
           }
         ]
@@ -205,6 +208,7 @@ function App() {
           onBranch: onBranchStable,
           onClose: onCloseStable
         },
+        style: defaultNodeSize,
         dragHandle: '.chat-node-header'
       }
     ])

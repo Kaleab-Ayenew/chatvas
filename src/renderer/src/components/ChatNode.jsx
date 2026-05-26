@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, NodeResizer, Position } from '@xyflow/react'
 import './ChatNode.css'
 import { trackEvent } from '../analytics'
 
-function ChatNode({ id, data }) {
+function ChatNode({ id, data, selected }) {
   const webviewRef = useRef(null)
   const [title, setTitle] = useState(data.label || 'Chat')
   const [isLoading, setIsLoading] = useState(true)
@@ -90,6 +90,13 @@ function ChatNode({ id, data }) {
 
   return (
     <div className="chat-node">
+      <NodeResizer
+        isVisible={selected}
+        minWidth={360}
+        minHeight={420}
+        lineClassName="chat-node-resize-line"
+        handleClassName="chat-node-resize-handle"
+      />
       <Handle type="target" position={Position.Left} className="chat-handle" />
 
       {/* Header - this is the drag handle */}
