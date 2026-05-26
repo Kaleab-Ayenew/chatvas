@@ -31,12 +31,72 @@ body,
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: calc(100% - 32px);
   background: var(--bg-toolbar);
   backdrop-filter: blur(10px);
   padding: 8px 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 4px 24px var(--node-shadow);
+}
+
+.canvas-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 420px;
+  overflow-x: auto;
+  padding-right: 4px;
+}
+
+.canvas-tab,
+.add-canvas-btn {
+  height: 30px;
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+  background: var(--btn-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.canvas-tab {
+  max-width: 140px;
+  padding: 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.canvas-tab:hover,
+.add-canvas-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.add-canvas-btn {
+  width: 30px;
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.canvas-tab-input {
+  width: 140px;
+  height: 30px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg-node);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 13px;
+  outline: none;
 }
 
 .add-chat-btn {

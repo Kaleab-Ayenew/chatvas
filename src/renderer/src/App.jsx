@@ -11,10 +11,37 @@ import '@xyflow/react/dist/style.css'
 import ChatNode from './components/ChatNode'
 import themes from './themes'
 import { analyticsStatus, trackEvent } from './analytics'
+import {
+  createDefaultCanvas,
+  createDefaultNode,
+  loadCanvasState,
+  saveCanvasState
+} from './canvasStorage'
 
 let nodeIdCounter = 1
+let canvasIdCounter = 1
 const getNextNodeId = () => `node-${++nodeIdCounter}`
+const getNextCanvasId = () => `canvas-${++canvasIdCounter}`
 const defaultNodeSize = { width: 620, height: 750 }
+
+function syncIdCounters(canvasState) {
+  for (const canvas of canvasState.canvases) {
+    const canvasMatch = /^canvas-(\d+)$/.exec(canvas.id)
+    if (canvasMatch) canvasIdCounter = Math.max(canvasIdCounter, Number(canvasMatch[1]))
+
+    for (const node of canvas.nodes) {
+      const nodeMatch = /^node-(\d+)$/.exec(node.id)
+      if (nodeMatch) nodeIdCounter = Math.max(nodeIdCounter, Number(nodeMatch[1]))
+    }
+  }
+}
+
+function getActiveCanvas(canvasState) {
+  return (
+    canvasState.canvases.find((canvas) => canvas.id === canvasState.activeCanvasId) ||
+    canvasState.canvases[0]
+  )
+}
 
 // Swatch preview colors (the canvas bg for each theme)
 const swatchColors = {
@@ -66,9 +93,11 @@ function App() {
     }
   }, [])
 
-  // Stable ref for handleBranch (avoids circular dep with initial node data)
+  // Stable ref for node callbacks (avoids circular deps with persisted node data)
   const handleBranchRef = useRef(null)
   const handleCloseRef = useRef(null)
+  const handleUrlChangeRef = useRef(null)
+  const skipRenameOnBlurRef = useRef(false)
 
   const onBranchStable = useCallback(
     (url, sourceNodeId) => handleBranchRef.current?.(url, sourceNodeId),
@@ -78,28 +107,130 @@ function App() {
     (nodeId) => handleCloseRef.current?.(nodeId),
     []
   )
+  const onUrlChangeStable = useCallback(
+    (nodeId, url) => handleUrlChangeRef.current?.(nodeId, url),
+    []
+  )
+
+  const hydrateNodes = useCallback(
+    (storedNodes) =>
+      storedNodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          registerWebview,
+          unregisterWebview,
+          onBranch: onBranchStable,
+          onClose: onCloseStable,
+          onUrlChange: onUrlChangeStable
+        }
+      })),
+    [registerWebview, unregisterWebview, onBranchStable, onCloseStable, onUrlChangeStable]
+  )
+
+  const [canvasState, setCanvasState] = useState(() => {
+    const loaded = loadCanvasState(window.localStorage)
+    syncIdCounters(loaded)
+    return loaded
+  })
+  const activeCanvas = getActiveCanvas(canvasState)
+  const [renamingCanvasId, setRenamingCanvasId] = useState(null)
+  const [draftCanvasName, setDraftCanvasName] = useState('')
 
   // --- React Flow state ---
-  const [nodes, setNodes, onNodesChange] = useNodesState([
-    {
-      id: 'node-1',
-      type: 'chatNode',
-      position: { x: 0, y: 0 },
-      data: {
-        url: 'https://chatgpt.com',
-        label: 'ChatGPT',
-        registerWebview,
-        unregisterWebview,
-        onBranch: (url, sourceNodeId) => handleBranchRef.current?.(url, sourceNodeId),
-        onClose: (nodeId) => handleCloseRef.current?.(nodeId)
-      },
-      style: defaultNodeSize,
-      dragHandle: '.chat-node-header'
-    }
-  ])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState(hydrateNodes(activeCanvas.nodes))
+  const [edges, setEdges, onEdgesChange] = useEdgesState(activeCanvas.edges)
 
   const nodeTypes = useMemo(() => ({ chatNode: ChatNode }), [])
+
+  useEffect(() => {
+    setCanvasState((current) => ({
+      ...current,
+      canvases: current.canvases.map((canvas) =>
+        canvas.id === current.activeCanvasId ? { ...canvas, nodes, edges } : canvas
+      )
+    }))
+  }, [nodes, edges])
+
+  useEffect(() => {
+    saveCanvasState(window.localStorage, canvasState)
+  }, [canvasState])
+
+  const switchCanvas = useCallback(
+    (canvasId) => {
+      if (canvasId === canvasState.activeCanvasId) return
+
+      const nextCanvasState = {
+        ...canvasState,
+        activeCanvasId: canvasId,
+        canvases: canvasState.canvases.map((canvas) =>
+          canvas.id === canvasState.activeCanvasId ? { ...canvas, nodes, edges } : canvas
+        )
+      }
+      const nextCanvas = getActiveCanvas(nextCanvasState)
+
+      webContentsMapRef.current.clear()
+      setCanvasState(nextCanvasState)
+      setNodes(hydrateNodes(nextCanvas.nodes))
+      setEdges(nextCanvas.edges)
+    },
+    [canvasState, nodes, edges, hydrateNodes, setNodes, setEdges]
+  )
+
+  const handleAddCanvas = useCallback(() => {
+    const canvas = createDefaultCanvas({
+      id: getNextCanvasId(),
+      name: `Canvas ${canvasState.canvases.length + 1}`
+    })
+    canvas.nodes = [createDefaultNode({ id: getNextNodeId() })]
+
+    const nextCanvasState = {
+      activeCanvasId: canvas.id,
+      canvases: [
+        ...canvasState.canvases.map((existingCanvas) =>
+          existingCanvas.id === canvasState.activeCanvasId
+            ? { ...existingCanvas, nodes, edges }
+            : existingCanvas
+        ),
+        canvas
+      ]
+    }
+
+    webContentsMapRef.current.clear()
+    setCanvasState(nextCanvasState)
+    setNodes(hydrateNodes(canvas.nodes))
+    setEdges(canvas.edges)
+  }, [canvasState, nodes, edges, hydrateNodes, setNodes, setEdges])
+
+  const startRenamingCanvas = useCallback((canvas) => {
+    skipRenameOnBlurRef.current = false
+    setRenamingCanvasId(canvas.id)
+    setDraftCanvasName(canvas.name)
+  }, [])
+
+  const cancelRenamingCanvas = useCallback(() => {
+    skipRenameOnBlurRef.current = true
+    setRenamingCanvasId(null)
+    setDraftCanvasName('')
+  }, [])
+
+  const renameCanvas = useCallback(() => {
+    if (skipRenameOnBlurRef.current) {
+      skipRenameOnBlurRef.current = false
+      return
+    }
+    if (!renamingCanvasId) return
+
+    const nextName = draftCanvasName.trim()
+    setCanvasState((current) => ({
+      ...current,
+      canvases: current.canvases.map((canvas) =>
+        canvas.id === renamingCanvasId && nextName ? { ...canvas, name: nextName } : canvas
+      )
+    }))
+    setRenamingCanvasId(null)
+    setDraftCanvasName('')
+  }, [renamingCanvasId, draftCanvasName])
 
   // --- Close a node and its connected edges ---
   const handleClose = useCallback(
@@ -112,6 +243,18 @@ function App() {
     [unregisterWebview, setNodes, setEdges]
   )
   handleCloseRef.current = handleClose
+
+  const handleUrlChange = useCallback(
+    (nodeId, url) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId ? { ...node, data: { ...node.data, url } } : node
+        )
+      )
+    },
+    [setNodes]
+  )
+  handleUrlChangeRef.current = handleUrlChange
 
   // --- Branch handler ---
   const handleBranch = useCallback(
@@ -139,7 +282,8 @@ function App() {
               registerWebview,
               unregisterWebview,
               onBranch: onBranchStable,
-              onClose: onCloseStable
+              onClose: onCloseStable,
+              onUrlChange: onUrlChangeStable
             },
             style: defaultNodeSize,
             dragHandle: '.chat-node-header'
@@ -163,12 +307,22 @@ function App() {
       trackEvent(isBranch ? 'branch_created' : 'node_created', {
         node_id: newId,
         source_node_id: sourceNodeId || null,
-        source_url: url
+        source_url: url,
+        canvas_id: canvasState.activeCanvasId
       })
 
       return newId
     },
-    [registerWebview, unregisterWebview, onBranchStable, onCloseStable, setNodes, setEdges]
+    [
+      registerWebview,
+      unregisterWebview,
+      onBranchStable,
+      onCloseStable,
+      onUrlChangeStable,
+      setNodes,
+      setEdges,
+      canvasState.activeCanvasId
+    ]
   )
   handleBranchRef.current = handleBranch
 
@@ -178,7 +332,7 @@ function App() {
 
     window.electronAPI.onNewBranch(({ url, sourceWebContentsId }) => {
       const sourceNodeId = webContentsMapRef.current.get(sourceWebContentsId)
-      handleBranch(url, sourceNodeId || 'node-1')
+      handleBranch(url, sourceNodeId || nodes[0]?.id || 'node-1')
     })
 
     return () => {
@@ -186,7 +340,7 @@ function App() {
         window.electronAPI.removeNewBranchListener()
       }
     }
-  }, [handleBranch])
+  }, [handleBranch, nodes])
 
   // --- Add a fresh root ChatGPT node ---
   const handleAddRootNode = useCallback(() => {
@@ -206,7 +360,8 @@ function App() {
           registerWebview,
           unregisterWebview,
           onBranch: onBranchStable,
-          onClose: onCloseStable
+          onClose: onCloseStable,
+          onUrlChange: onUrlChangeStable
         },
         style: defaultNodeSize,
         dragHandle: '.chat-node-header'
@@ -215,9 +370,18 @@ function App() {
     trackEvent('node_created', {
       node_id: newId,
       source_node_id: null,
-      source_url: 'https://chatgpt.com'
+      source_url: 'https://chatgpt.com',
+      canvas_id: canvasState.activeCanvasId
     })
-  }, [registerWebview, unregisterWebview, onBranchStable, onCloseStable, setNodes])
+  }, [
+    registerWebview,
+    unregisterWebview,
+    onBranchStable,
+    onCloseStable,
+    onUrlChangeStable,
+    setNodes,
+    canvasState.activeCanvasId
+  ])
 
   // --- Delete nodes via keyboard ---
   const handleNodesDelete = useCallback(
@@ -232,6 +396,39 @@ function App() {
   return (
     <div className="app-container">
       <div className="toolbar">
+        <div className="canvas-tabs" aria-label="Canvases">
+          {canvasState.canvases.map((canvas) =>
+            renamingCanvasId === canvas.id ? (
+              <input
+                key={canvas.id}
+                className="canvas-tab-input"
+                value={draftCanvasName}
+                autoFocus
+                onFocus={(event) => event.target.select()}
+                onChange={(event) => setDraftCanvasName(event.target.value)}
+                onBlur={renameCanvas}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') renameCanvas()
+                  if (event.key === 'Escape') cancelRenamingCanvas()
+                }}
+              />
+            ) : (
+              <button
+                key={canvas.id}
+                type="button"
+                className={`canvas-tab ${canvas.id === canvasState.activeCanvasId ? 'active' : ''}`}
+                onClick={() => switchCanvas(canvas.id)}
+                onDoubleClick={() => startRenamingCanvas(canvas)}
+                title="Double-click to rename"
+              >
+                {canvas.name}
+              </button>
+            )
+          )}
+          <button className="add-canvas-btn" onClick={handleAddCanvas} title="New canvas">
+            +
+          </button>
+        </div>
         <button className="add-chat-btn" onClick={handleAddRootNode}>
           + New Chat
         </button>
@@ -252,6 +449,7 @@ function App() {
         </div>
       </div>
       <ReactFlow
+        key={canvasState.activeCanvasId}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}

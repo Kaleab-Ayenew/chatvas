@@ -6,7 +6,10 @@ const chatNodeSource = await readFile(
   new URL('../src/renderer/src/components/ChatNode.jsx', import.meta.url),
   'utf8'
 )
-const appSource = await readFile(new URL('../src/renderer/src/App.jsx', import.meta.url), 'utf8')
+const canvasStorageSource = await readFile(
+  new URL('../src/renderer/src/canvasStorage.js', import.meta.url),
+  'utf8'
+)
 const chatNodeCss = await readFile(
   new URL('../src/renderer/src/components/ChatNode.css', import.meta.url),
   'utf8'
@@ -20,11 +23,8 @@ test('chat nodes expose React Flow resize controls', () => {
 })
 
 test('new chat nodes start with default dimensions managed by React Flow', () => {
-  const defaultSizeDefinition = /const\s+defaultNodeSize\s*=\s*\{\s*width:\s*620,\s*height:\s*750\s*\}/s
-  assert.match(appSource, defaultSizeDefinition)
-
-  const styledNodes = appSource.match(/style:\s*defaultNodeSize/g) || []
-  assert.equal(styledNodes.length, 3)
+  assert.match(canvasStorageSource, /DEFAULT_NODE_SIZE\s*=\s*\{\s*width:\s*620,\s*height:\s*750\s*\}/s)
+  assert.match(canvasStorageSource, /style:\s*DEFAULT_NODE_SIZE/)
 
   assert.doesNotMatch(chatNodeCss, /\.chat-node\s*\{[^}]*\bwidth:\s*620px/s)
   assert.doesNotMatch(chatNodeCss, /\.chat-node\s*\{[^}]*\bheight:\s*750px/s)

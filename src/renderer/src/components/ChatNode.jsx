@@ -36,8 +36,9 @@ function ChatNode({ id, data, selected }) {
     }
 
     const onDidNavigate = (event) => {
-      if (event.url) setCurrentUrl(event.url)
       if (event.url) {
+        setCurrentUrl(event.url)
+        data.onUrlChange?.(id, event.url)
         trackEvent('webview_navigated', {
           node_id: id,
           destination_url: event.url
