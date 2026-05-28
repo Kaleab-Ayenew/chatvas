@@ -34,6 +34,9 @@ function serializeNode(node) {
     id: node.id,
     type: node.type,
     position: node.position,
+    width: node.width,
+    height: node.height,
+    measured: node.measured,
     style: node.style,
     data: {
       url: node.data?.url,

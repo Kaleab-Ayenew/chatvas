@@ -26,7 +26,10 @@ test('serializeCanvasState preserves canvas names, edges, node geometry, and ful
     ...canvas.nodes[0],
     id: 'node-chat',
     position: { x: 12, y: 34 },
-    style: { width: 710, height: 820 },
+    width: 710,
+    height: 820,
+    measured: { width: 710, height: 820 },
+    style: { width: 620, height: 750 },
     data: {
       ...canvas.nodes[0].data,
       url: 'https://chatgpt.com/c/abc-123?model=gpt-4.1&temporary-chat=false',
@@ -56,7 +59,10 @@ test('serializeCanvasState preserves canvas names, edges, node geometry, and ful
             id: 'node-chat',
             type: 'chatNode',
             position: { x: 12, y: 34 },
-            style: { width: 710, height: 820 },
+            width: 710,
+            height: 820,
+            measured: { width: 710, height: 820 },
+            style: { width: 620, height: 750 },
             data: {
               url: 'https://chatgpt.com/c/abc-123?model=gpt-4.1&temporary-chat=false',
               label: 'Saved Chat'
