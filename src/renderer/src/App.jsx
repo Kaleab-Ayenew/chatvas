@@ -5,6 +5,7 @@ import {
   Controls,
   MiniMap,
   ReactFlowProvider,
+  addEdge,
   useNodesState,
   useEdgesState
 } from '@xyflow/react'
@@ -108,6 +109,7 @@ function CanvasFlow({
 
   const [nodes, setNodes, onNodesChange] = useNodesState(hydrateNodes(canvas.nodes))
   const [edges, setEdges, onEdgesChange] = useEdgesState(canvas.edges)
+  const [isConnecting, setIsConnecting] = useState(false)
   const lastSyncedStateRef = useRef({ nodes, edges })
 
   useEffect(() => {
@@ -218,6 +220,40 @@ function CanvasFlow({
   )
   handleBranchRef.current = handleBranch
 
+  const handleConnect = useCallback(
+    (connection) => {
+      setEdges((currentEdges) =>
+        addEdge(
+          {
+            ...connection,
+            animated: true,
+            style: { stroke: 'var(--accent)', strokeWidth: 2 }
+          },
+          currentEdges
+        )
+      )
+    },
+    [canvas.id, setEdges]
+  )
+
+  const handleConnectStart = useCallback(() => {
+    setIsConnecting(true)
+  }, [])
+
+  const stopConnecting = useCallback(() => {
+    setIsConnecting(false)
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('mouseup', stopConnecting)
+    window.addEventListener('blur', stopConnecting)
+
+    return () => {
+      window.removeEventListener('mouseup', stopConnecting)
+      window.removeEventListener('blur', stopConnecting)
+    }
+  }, [stopConnecting])
+
   useEffect(() => {
     onCanvasBranchHandlerChange(canvas.id, handleBranch)
     return () => onCanvasBranchHandlerChange(canvas.id, null)
@@ -235,11 +271,16 @@ function CanvasFlow({
   return (
     <ReactFlowProvider>
       <ReactFlow
+        className={isConnecting ? 'canvas-flow-connecting' : undefined}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodesDelete={handleNodesDelete}
+        onConnect={handleConnect}
+        onConnectStart={handleConnectStart}
+        onConnectEnd={stopConnecting}
+        connectOnClick={false}
         nodeTypes={nodeTypes}
         fitView={isActive}
         minZoom={0.05}

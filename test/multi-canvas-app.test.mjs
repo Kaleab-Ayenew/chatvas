@@ -61,6 +61,34 @@ test('App isolates each mounted canvas with its own React Flow provider', () => 
   assert.match(appSource, /<ReactFlowProvider>/)
 })
 
+test('App lets users manually connect chat nodes with persisted branch-style edges', () => {
+  assert.match(
+    appSource,
+    /import\s*\{[^}]*addEdge[^}]*\}\s*from\s*['"]@xyflow\/react['"]/,
+    'React Flow addEdge should be imported'
+  )
+  assert.match(appSource, /const handleConnect = useCallback/, 'CanvasFlow should define a manual connect handler')
+  assert.match(appSource, /onConnect=\{handleConnect\}/, 'ReactFlow should receive the manual connect handler')
+  assert.match(
+    appSource,
+    /const handleConnect = useCallback\([\s\S]*addEdge\([\s\S]*animated:\s*true[\s\S]*style:\s*\{ stroke:\s*['"]var\(--accent\)['"], strokeWidth:\s*2 \}/,
+    'Manual edges should be styled like branch edges inside handleConnect'
+  )
+})
+
+test('App disables webview pointer events while drawing a manual connection', () => {
+  assert.match(appSource, /const \[isConnecting, setIsConnecting\] = useState\(false\)/)
+  assert.match(appSource, /const handleConnectStart = useCallback\(\(\) => \{\s*setIsConnecting\(true\)\s*\}, \[\]\)/)
+  assert.match(appSource, /const stopConnecting = useCallback\(\(\) => \{\s*setIsConnecting\(false\)\s*\}, \[\]\)/)
+  assert.match(appSource, /onConnectStart=\{handleConnectStart\}/)
+  assert.match(appSource, /onConnectEnd=\{stopConnecting\}/)
+  assert.match(appSource, /connectOnClick=\{false\}/)
+  assert.match(appSource, /window\.addEventListener\('mouseup', stopConnecting\)/)
+  assert.match(appSource, /window\.addEventListener\('blur', stopConnecting\)/)
+  assert.match(appSource, /canvas-flow-connecting/)
+  assert.match(appCss, /\.canvas-flow-connecting \.chat-webview\s*\{[^}]*pointer-events:\s*none/s)
+})
+
 test('App styles the canvas tab bar', () => {
   assert.match(appCss, /\.canvas-tabs\s*\{/)
   assert.match(appCss, /\.canvas-tab\.active\s*\{/)

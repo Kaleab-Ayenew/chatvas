@@ -168,6 +168,7 @@
   height: 12px !important;
   background: var(--accent) !important;
   border: 2px solid var(--bg-node) !important;
+  z-index: 10;
 }
 
 .chat-handle:hover {

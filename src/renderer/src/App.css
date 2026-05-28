@@ -26,6 +26,10 @@ body,
   height: 100%;
 }
 
+.canvas-flow-connecting .chat-webview {
+  pointer-events: none;
+}
+
 /* --- Toolbar --- */
 .toolbar {
   position: absolute;

@@ -41,3 +41,7 @@ test('new chat nodes start with default dimensions managed by React Flow', () =>
   assert.doesNotMatch(chatNodeCss, /\.chat-node\s*\{[^}]*\bwidth:\s*620px/s)
   assert.doesNotMatch(chatNodeCss, /\.chat-node\s*\{[^}]*\bheight:\s*750px/s)
 })
+
+test('chat node handles stay above embedded webviews for manual connections', () => {
+  assert.match(chatNodeCss, /\.chat-handle\s*\{[^}]*z-index:\s*10/s)
+})
