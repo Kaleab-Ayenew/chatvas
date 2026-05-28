@@ -21,6 +21,23 @@ test('App persists canvas state with localStorage helpers', () => {
   assert.match(appSource, /setCanvasState/)
 })
 
+test('App avoids replacing node state when persisted URL has not changed', () => {
+  assert.match(appSource, /node\.data\?\.url === url/)
+  assert.match(appSource, /\? node\s*:/)
+})
+
+test('App keeps the most recent inactive canvas mounted for faster switching', () => {
+  assert.match(appSource, /recentCanvasId/)
+  assert.match(appSource, /visibleCanvasIds/)
+  assert.match(appSource, /canvas-flow-pane/)
+  assert.match(appSource, /display:\s*canvas\.id === canvasState\.activeCanvasId \? 'block' : 'none'/)
+})
+
+test('App isolates each mounted canvas with its own React Flow provider', () => {
+  assert.match(appSource, /ReactFlowProvider/)
+  assert.match(appSource, /<ReactFlowProvider>/)
+})
+
 test('App styles the canvas tab bar', () => {
   assert.match(appCss, /\.canvas-tabs\s*\{/)
   assert.match(appCss, /\.canvas-tab\.active\s*\{/)

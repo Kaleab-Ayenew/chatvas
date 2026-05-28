@@ -4,6 +4,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  ReactFlowProvider,
   useNodesState,
   useEdgesState
 } from '@xyflow/react'
@@ -23,6 +24,12 @@ let canvasIdCounter = 1
 const getNextNodeId = () => `node-${++nodeIdCounter}`
 const getNextCanvasId = () => `canvas-${++canvasIdCounter}`
 const defaultNodeSize = { width: 620, height: 750 }
+const nodeTypes = { chatNode: ChatNode }
+const defaultEdgeOptions = {
+  animated: true,
+  style: { stroke: 'var(--accent)', strokeWidth: 2 }
+}
+const proOptions = { hideAttribution: true }
 
 function syncIdCounters(canvasState) {
   for (const canvas of canvasState.canvases) {
@@ -36,10 +43,213 @@ function syncIdCounters(canvasState) {
   }
 }
 
-function getActiveCanvas(canvasState) {
+function CanvasFlow({
+  canvas,
+  isActive,
+  registerWebview,
+  unregisterWebview,
+  onCanvasChange,
+  onCanvasBranchHandlerChange
+}) {
+  const handleBranchRef = useRef(null)
+  const handleCloseRef = useRef(null)
+  const handleUrlChangeRef = useRef(null)
+
+  const canvasRegisterWebview = useCallback(
+    (nodeId, wcId) => registerWebview(canvas.id, nodeId, wcId),
+    [canvas.id, registerWebview]
+  )
+  const canvasUnregisterWebview = useCallback(
+    (nodeId) => unregisterWebview(canvas.id, nodeId),
+    [canvas.id, unregisterWebview]
+  )
+
+  const onBranchStable = useCallback(
+    (url, sourceNodeId) => handleBranchRef.current?.(url, sourceNodeId),
+    []
+  )
+  const onCloseStable = useCallback(
+    (nodeId) => handleCloseRef.current?.(nodeId),
+    []
+  )
+  const onUrlChangeStable = useCallback(
+    (nodeId, url) => handleUrlChangeRef.current?.(nodeId, url),
+    []
+  )
+
+  const hydrateNodes = useCallback(
+    (storedNodes) =>
+      storedNodes.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          registerWebview: canvasRegisterWebview,
+          unregisterWebview: canvasUnregisterWebview,
+          onBranch: onBranchStable,
+          onClose: onCloseStable,
+          onUrlChange: onUrlChangeStable
+        }
+      })),
+    [
+      canvasRegisterWebview,
+      canvasUnregisterWebview,
+      onBranchStable,
+      onCloseStable,
+      onUrlChangeStable
+    ]
+  )
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(hydrateNodes(canvas.nodes))
+  const [edges, setEdges, onEdgesChange] = useEdgesState(canvas.edges)
+  const lastSyncedStateRef = useRef({ nodes, edges })
+
+  useEffect(() => {
+    if (lastSyncedStateRef.current.nodes === nodes && lastSyncedStateRef.current.edges === edges) return
+
+    lastSyncedStateRef.current = { nodes, edges }
+    onCanvasChange(canvas.id, nodes, edges)
+  }, [canvas.id, nodes, edges, onCanvasChange])
+
+  const handleClose = useCallback(
+    (nodeId) => {
+      canvasUnregisterWebview(nodeId)
+      setNodes((nds) => nds.filter((n) => n.id !== nodeId))
+      setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
+      trackEvent('node_closed', { node_id: nodeId, canvas_id: canvas.id })
+    },
+    [canvas.id, canvasUnregisterWebview, setNodes, setEdges]
+  )
+  handleCloseRef.current = handleClose
+
+  const handleUrlChange = useCallback(
+    (nodeId, url) => {
+      setNodes((nds) =>
+        nds.map((node) =>
+          node.id === nodeId
+            ? node.data?.url === url
+              ? node
+              : { ...node, data: { ...node.data, url } }
+            : node
+        )
+      )
+    },
+    [setNodes]
+  )
+  handleUrlChangeRef.current = handleUrlChange
+
+  const handleBranch = useCallback(
+    (url, sourceNodeId) => {
+      const newId = getNextNodeId()
+      const isBranch = Boolean(sourceNodeId)
+
+      setNodes((currentNodes) => {
+        const sourceNode = currentNodes.find((n) => n.id === sourceNodeId)
+        const baseX = sourceNode ? sourceNode.position.x : 0
+        const baseY = sourceNode ? sourceNode.position.y : 0
+
+        return [
+          ...currentNodes,
+          {
+            id: newId,
+            type: 'chatNode',
+            position: isBranch
+              ? {
+                  x: baseX + 700,
+                  y: baseY + Math.random() * 300 - 150
+                }
+              : {
+                  x: Math.random() * 800 - 400,
+                  y: Math.random() * 600 - 300
+                },
+            data: {
+              url,
+              label: isBranch ? `Branch from ${sourceNodeId}` : 'New Chat',
+              registerWebview: canvasRegisterWebview,
+              unregisterWebview: canvasUnregisterWebview,
+              onBranch: onBranchStable,
+              onClose: onCloseStable,
+              onUrlChange: onUrlChangeStable
+            },
+            style: defaultNodeSize,
+            dragHandle: '.chat-node-header'
+          }
+        ]
+      })
+
+      if (sourceNodeId) {
+        setEdges((currentEdges) => [
+          ...currentEdges,
+          {
+            id: `edge-${sourceNodeId}-${newId}`,
+            source: sourceNodeId,
+            target: newId,
+            animated: true,
+            style: { stroke: 'var(--accent)', strokeWidth: 2 }
+          }
+        ])
+      }
+
+      trackEvent(isBranch ? 'branch_created' : 'node_created', {
+        node_id: newId,
+        source_node_id: sourceNodeId || null,
+        source_url: url,
+        canvas_id: canvas.id
+      })
+
+      return newId
+    },
+    [
+      canvas.id,
+      canvasRegisterWebview,
+      canvasUnregisterWebview,
+      onBranchStable,
+      onCloseStable,
+      onUrlChangeStable,
+      setNodes,
+      setEdges
+    ]
+  )
+  handleBranchRef.current = handleBranch
+
+  useEffect(() => {
+    onCanvasBranchHandlerChange(canvas.id, handleBranch)
+    return () => onCanvasBranchHandlerChange(canvas.id, null)
+  }, [canvas.id, handleBranch, onCanvasBranchHandlerChange])
+
+  const handleNodesDelete = useCallback(
+    (deleted) => {
+      for (const node of deleted) {
+        canvasUnregisterWebview(node.id)
+      }
+    },
+    [canvasUnregisterWebview]
+  )
+
   return (
-    canvasState.canvases.find((canvas) => canvas.id === canvasState.activeCanvasId) ||
-    canvasState.canvases[0]
+    <ReactFlowProvider>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodesDelete={handleNodesDelete}
+        nodeTypes={nodeTypes}
+        fitView={isActive}
+        minZoom={0.05}
+        maxZoom={2}
+        defaultEdgeOptions={defaultEdgeOptions}
+        proOptions={proOptions}
+      >
+        <Background variant="dots" gap={20} size={1} color="var(--dots-color)" />
+        <Controls position="bottom-right" />
+        <MiniMap
+          nodeColor="var(--accent)"
+          maskColor="var(--minimap-mask)"
+          style={{ backgroundColor: 'var(--minimap-bg)' }}
+          position="bottom-left"
+        />
+      </ReactFlow>
+    </ReactFlowProvider>
   )
 }
 
@@ -80,101 +290,82 @@ function App() {
 
   // --- Webview <-> Node mapping ---
   const webContentsMapRef = useRef(new Map())
+  const branchHandlersRef = useRef(new Map())
 
-  const registerWebview = useCallback((nodeId, wcId) => {
-    webContentsMapRef.current.set(wcId, nodeId)
+  const registerWebview = useCallback((canvasId, nodeId, wcId) => {
+    webContentsMapRef.current.set(wcId, { canvasId, nodeId })
   }, [])
 
-  const unregisterWebview = useCallback((nodeId) => {
-    for (const [wcId, nId] of webContentsMapRef.current.entries()) {
-      if (nId === nodeId) {
+  const unregisterWebview = useCallback((canvasId, nodeId) => {
+    for (const [wcId, entry] of webContentsMapRef.current.entries()) {
+      if (entry.canvasId === canvasId && entry.nodeId === nodeId) {
         webContentsMapRef.current.delete(wcId)
       }
     }
   }, [])
-
-  // Stable ref for node callbacks (avoids circular deps with persisted node data)
-  const handleBranchRef = useRef(null)
-  const handleCloseRef = useRef(null)
-  const handleUrlChangeRef = useRef(null)
-  const skipRenameOnBlurRef = useRef(false)
-
-  const onBranchStable = useCallback(
-    (url, sourceNodeId) => handleBranchRef.current?.(url, sourceNodeId),
-    []
-  )
-  const onCloseStable = useCallback(
-    (nodeId) => handleCloseRef.current?.(nodeId),
-    []
-  )
-  const onUrlChangeStable = useCallback(
-    (nodeId, url) => handleUrlChangeRef.current?.(nodeId, url),
-    []
-  )
-
-  const hydrateNodes = useCallback(
-    (storedNodes) =>
-      storedNodes.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          registerWebview,
-          unregisterWebview,
-          onBranch: onBranchStable,
-          onClose: onCloseStable,
-          onUrlChange: onUrlChangeStable
-        }
-      })),
-    [registerWebview, unregisterWebview, onBranchStable, onCloseStable, onUrlChangeStable]
-  )
 
   const [canvasState, setCanvasState] = useState(() => {
     const loaded = loadCanvasState(window.localStorage)
     syncIdCounters(loaded)
     return loaded
   })
-  const activeCanvas = getActiveCanvas(canvasState)
+  const [recentCanvasId, setRecentCanvasId] = useState(null)
   const [renamingCanvasId, setRenamingCanvasId] = useState(null)
   const [draftCanvasName, setDraftCanvasName] = useState('')
+  const skipRenameOnBlurRef = useRef(false)
 
-  // --- React Flow state ---
-  const [nodes, setNodes, onNodesChange] = useNodesState(hydrateNodes(activeCanvas.nodes))
-  const [edges, setEdges, onEdgesChange] = useEdgesState(activeCanvas.edges)
+  const visibleCanvasIds = useMemo(() => {
+    const ids = [canvasState.activeCanvasId]
+    if (recentCanvasId && recentCanvasId !== canvasState.activeCanvasId) ids.push(recentCanvasId)
+    return ids
+  }, [canvasState.activeCanvasId, recentCanvasId])
 
-  const nodeTypes = useMemo(() => ({ chatNode: ChatNode }), [])
-
-  useEffect(() => {
-    setCanvasState((current) => ({
-      ...current,
-      canvases: current.canvases.map((canvas) =>
-        canvas.id === current.activeCanvasId ? { ...canvas, nodes, edges } : canvas
-      )
-    }))
-  }, [nodes, edges])
+  const visibleCanvases = useMemo(
+    () =>
+      visibleCanvasIds
+        .map((canvasId) => canvasState.canvases.find((canvas) => canvas.id === canvasId))
+        .filter(Boolean),
+    [canvasState.canvases, visibleCanvasIds]
+  )
 
   useEffect(() => {
     saveCanvasState(window.localStorage, canvasState)
   }, [canvasState])
 
+  const handleCanvasChange = useCallback((canvasId, nodes, edges) => {
+    setCanvasState((current) => {
+      let changed = false
+      const canvases = current.canvases.map((canvas) => {
+        if (canvas.id !== canvasId) return canvas
+        if (canvas.nodes === nodes && canvas.edges === edges) return canvas
+
+        changed = true
+        return { ...canvas, nodes, edges }
+      })
+
+      return changed ? { ...current, canvases } : current
+    })
+  }, [])
+
+  const handleCanvasBranchHandlerChange = useCallback((canvasId, handler) => {
+    if (handler) {
+      branchHandlersRef.current.set(canvasId, handler)
+    } else {
+      branchHandlersRef.current.delete(canvasId)
+    }
+  }, [])
+
   const switchCanvas = useCallback(
     (canvasId) => {
       if (canvasId === canvasState.activeCanvasId) return
 
-      const nextCanvasState = {
-        ...canvasState,
-        activeCanvasId: canvasId,
-        canvases: canvasState.canvases.map((canvas) =>
-          canvas.id === canvasState.activeCanvasId ? { ...canvas, nodes, edges } : canvas
-        )
-      }
-      const nextCanvas = getActiveCanvas(nextCanvasState)
-
-      webContentsMapRef.current.clear()
-      setCanvasState(nextCanvasState)
-      setNodes(hydrateNodes(nextCanvas.nodes))
-      setEdges(nextCanvas.edges)
+      setRecentCanvasId(canvasState.activeCanvasId)
+      setCanvasState((current) => ({
+        ...current,
+        activeCanvasId: canvasId
+      }))
     },
-    [canvasState, nodes, edges, hydrateNodes, setNodes, setEdges]
+    [canvasState.activeCanvasId]
   )
 
   const handleAddCanvas = useCallback(() => {
@@ -184,23 +375,12 @@ function App() {
     })
     canvas.nodes = [createDefaultNode({ id: getNextNodeId() })]
 
-    const nextCanvasState = {
+    setRecentCanvasId(canvasState.activeCanvasId)
+    setCanvasState((current) => ({
       activeCanvasId: canvas.id,
-      canvases: [
-        ...canvasState.canvases.map((existingCanvas) =>
-          existingCanvas.id === canvasState.activeCanvasId
-            ? { ...existingCanvas, nodes, edges }
-            : existingCanvas
-        ),
-        canvas
-      ]
-    }
-
-    webContentsMapRef.current.clear()
-    setCanvasState(nextCanvasState)
-    setNodes(hydrateNodes(canvas.nodes))
-    setEdges(canvas.edges)
-  }, [canvasState, nodes, edges, hydrateNodes, setNodes, setEdges])
+      canvases: [...current.canvases, canvas]
+    }))
+  }, [canvasState.activeCanvasId, canvasState.canvases.length])
 
   const startRenamingCanvas = useCallback((canvas) => {
     skipRenameOnBlurRef.current = false
@@ -232,107 +412,14 @@ function App() {
     setDraftCanvasName('')
   }, [renamingCanvasId, draftCanvasName])
 
-  // --- Close a node and its connected edges ---
-  const handleClose = useCallback(
-    (nodeId) => {
-      unregisterWebview(nodeId)
-      setNodes((nds) => nds.filter((n) => n.id !== nodeId))
-      setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId))
-      trackEvent('node_closed', { node_id: nodeId })
-    },
-    [unregisterWebview, setNodes, setEdges]
-  )
-  handleCloseRef.current = handleClose
-
-  const handleUrlChange = useCallback(
-    (nodeId, url) => {
-      setNodes((nds) =>
-        nds.map((node) =>
-          node.id === nodeId ? { ...node, data: { ...node.data, url } } : node
-        )
-      )
-    },
-    [setNodes]
-  )
-  handleUrlChangeRef.current = handleUrlChange
-
-  // --- Branch handler ---
-  const handleBranch = useCallback(
-    (url, sourceNodeId) => {
-      const newId = getNextNodeId()
-      const isBranch = Boolean(sourceNodeId)
-
-      setNodes((currentNodes) => {
-        const sourceNode = currentNodes.find((n) => n.id === sourceNodeId)
-        const baseX = sourceNode ? sourceNode.position.x : 0
-        const baseY = sourceNode ? sourceNode.position.y : 0
-
-        return [
-          ...currentNodes,
-          {
-            id: newId,
-            type: 'chatNode',
-            position: {
-              x: baseX + 700,
-              y: baseY + Math.random() * 300 - 150
-            },
-            data: {
-              url,
-              label: `Branch from ${sourceNodeId}`,
-              registerWebview,
-              unregisterWebview,
-              onBranch: onBranchStable,
-              onClose: onCloseStable,
-              onUrlChange: onUrlChangeStable
-            },
-            style: defaultNodeSize,
-            dragHandle: '.chat-node-header'
-          }
-        ]
-      })
-
-      if (sourceNodeId) {
-        setEdges((currentEdges) => [
-          ...currentEdges,
-          {
-            id: `edge-${sourceNodeId}-${newId}`,
-            source: sourceNodeId,
-            target: newId,
-            animated: true,
-            style: { stroke: 'var(--accent)', strokeWidth: 2 }
-          }
-        ])
-      }
-
-      trackEvent(isBranch ? 'branch_created' : 'node_created', {
-        node_id: newId,
-        source_node_id: sourceNodeId || null,
-        source_url: url,
-        canvas_id: canvasState.activeCanvasId
-      })
-
-      return newId
-    },
-    [
-      registerWebview,
-      unregisterWebview,
-      onBranchStable,
-      onCloseStable,
-      onUrlChangeStable,
-      setNodes,
-      setEdges,
-      canvasState.activeCanvasId
-    ]
-  )
-  handleBranchRef.current = handleBranch
-
-  // --- Fallback: listen for branch events from Electron main process via IPC ---
   useEffect(() => {
     if (!window.electronAPI) return
 
     window.electronAPI.onNewBranch(({ url, sourceWebContentsId }) => {
-      const sourceNodeId = webContentsMapRef.current.get(sourceWebContentsId)
-      handleBranch(url, sourceNodeId || nodes[0]?.id || 'node-1')
+      const source = webContentsMapRef.current.get(sourceWebContentsId)
+      const canvasId = source?.canvasId || canvasState.activeCanvasId
+      const sourceNodeId = source?.nodeId || null
+      branchHandlersRef.current.get(canvasId)?.(url, sourceNodeId)
     })
 
     return () => {
@@ -340,58 +427,12 @@ function App() {
         window.electronAPI.removeNewBranchListener()
       }
     }
-  }, [handleBranch, nodes])
+  }, [canvasState.activeCanvasId])
 
   // --- Add a fresh root ChatGPT node ---
   const handleAddRootNode = useCallback(() => {
-    const newId = getNextNodeId()
-    setNodes((nds) => [
-      ...nds,
-      {
-        id: newId,
-        type: 'chatNode',
-        position: {
-          x: Math.random() * 800 - 400,
-          y: Math.random() * 600 - 300
-        },
-        data: {
-          url: 'https://chatgpt.com',
-          label: 'New Chat',
-          registerWebview,
-          unregisterWebview,
-          onBranch: onBranchStable,
-          onClose: onCloseStable,
-          onUrlChange: onUrlChangeStable
-        },
-        style: defaultNodeSize,
-        dragHandle: '.chat-node-header'
-      }
-    ])
-    trackEvent('node_created', {
-      node_id: newId,
-      source_node_id: null,
-      source_url: 'https://chatgpt.com',
-      canvas_id: canvasState.activeCanvasId
-    })
-  }, [
-    registerWebview,
-    unregisterWebview,
-    onBranchStable,
-    onCloseStable,
-    onUrlChangeStable,
-    setNodes,
-    canvasState.activeCanvasId
-  ])
-
-  // --- Delete nodes via keyboard ---
-  const handleNodesDelete = useCallback(
-    (deleted) => {
-      for (const node of deleted) {
-        unregisterWebview(node.id)
-      }
-    },
-    [unregisterWebview]
-  )
+    branchHandlersRef.current.get(canvasState.activeCanvasId)?.('https://chatgpt.com', null)
+  }, [canvasState.activeCanvasId])
 
   return (
     <div className="app-container">
@@ -448,32 +489,22 @@ function App() {
           ))}
         </div>
       </div>
-      <ReactFlow
-        key={canvasState.activeCanvasId}
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodesDelete={handleNodesDelete}
-        nodeTypes={nodeTypes}
-        fitView
-        minZoom={0.05}
-        maxZoom={2}
-        defaultEdgeOptions={{
-          animated: true,
-          style: { stroke: 'var(--accent)', strokeWidth: 2 }
-        }}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background variant="dots" gap={20} size={1} color="var(--dots-color)" />
-        <Controls position="bottom-right" />
-        <MiniMap
-          nodeColor="var(--accent)"
-          maskColor="var(--minimap-mask)"
-          style={{ backgroundColor: 'var(--minimap-bg)' }}
-          position="bottom-left"
-        />
-      </ReactFlow>
+      {visibleCanvases.map((canvas) => (
+        <div
+          key={canvas.id}
+          className="canvas-flow-pane"
+          style={{ display: canvas.id === canvasState.activeCanvasId ? 'block' : 'none' }}
+        >
+          <CanvasFlow
+            canvas={canvas}
+            isActive={canvas.id === canvasState.activeCanvasId}
+            registerWebview={registerWebview}
+            unregisterWebview={unregisterWebview}
+            onCanvasChange={handleCanvasChange}
+            onCanvasBranchHandlerChange={handleCanvasBranchHandlerChange}
+          />
+        </div>
+      ))}
     </div>
   )
 }

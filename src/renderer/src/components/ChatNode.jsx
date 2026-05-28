@@ -5,9 +5,13 @@ import { trackEvent } from '../analytics'
 
 function ChatNode({ id, data, selected }) {
   const webviewRef = useRef(null)
+  const currentUrlRef = useRef(data.url)
+  const callbacksRef = useRef(data)
   const [title, setTitle] = useState(data.label || 'Chat')
   const [isLoading, setIsLoading] = useState(true)
   const [currentUrl, setCurrentUrl] = useState(data.url)
+
+  callbacksRef.current = data
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -19,10 +23,10 @@ function ChatNode({ id, data, selected }) {
     const onDomReady = () => {
       setIsLoading(false)
       // Register this webview so the app knows which node it belongs to
-      if (data.registerWebview) {
+      if (callbacksRef.current.registerWebview) {
         try {
           const wcId = webview.getWebContentsId()
-          data.registerWebview(id, wcId)
+          callbacksRef.current.registerWebview(id, wcId)
         } catch (e) {
           console.warn('Could not get webContentsId:', e)
         }
@@ -35,10 +39,17 @@ function ChatNode({ id, data, selected }) {
       }
     }
 
+    const persistCurrentUrl = (url) => {
+      if (!url || currentUrlRef.current === url) return
+
+      currentUrlRef.current = url
+      setCurrentUrl(url)
+      callbacksRef.current.onUrlChange?.(id, url)
+    }
+
     const onDidNavigate = (event) => {
       if (event.url) {
-        setCurrentUrl(event.url)
-        data.onUrlChange?.(id, event.url)
+        persistCurrentUrl(event.url)
         trackEvent('webview_navigated', {
           node_id: id,
           destination_url: event.url
@@ -46,36 +57,45 @@ function ChatNode({ id, data, selected }) {
       }
     }
 
+    const onDidNavigateInPage = (event) => {
+      persistCurrentUrl(event.url || webview.getURL?.())
+    }
+
     // Direct interception of new-window requests from the webview.
     // This fires in the renderer (no IPC needed) when the guest page
     // tries to open a new tab/window (e.g. ChatGPT "Branch in new chat").
     const onNewWindow = (event) => {
       const url = event.url
-      if (url && data.onBranch) {
+      if (url && callbacksRef.current.onBranch) {
         trackEvent('branch_requested', {
           node_id: id,
           target_url: url
         })
-        data.onBranch(url, id)
+        callbacksRef.current.onBranch(url, id)
       }
     }
 
     webview.addEventListener('dom-ready', onDomReady)
     webview.addEventListener('page-title-updated', onPageTitleUpdated)
     webview.addEventListener('did-navigate', onDidNavigate)
+    webview.addEventListener('did-navigate-in-page', onDidNavigateInPage)
     webview.addEventListener('new-window', onNewWindow)
 
     return () => {
+      try {
+        persistCurrentUrl(webview.getURL?.())
+      } catch {}
       webview.removeEventListener('dom-ready', onDomReady)
       webview.removeEventListener('page-title-updated', onPageTitleUpdated)
       webview.removeEventListener('did-navigate', onDidNavigate)
+      webview.removeEventListener('did-navigate-in-page', onDidNavigateInPage)
       webview.removeEventListener('new-window', onNewWindow)
 
-      if (data.unregisterWebview) {
-        data.unregisterWebview(id)
+      if (callbacksRef.current.unregisterWebview) {
+        callbacksRef.current.unregisterWebview(id)
       }
     }
-  }, [id, data])
+  }, [id])
 
   const handleBack = () => {
     if (webviewRef.current?.canGoBack()) webviewRef.current.goBack()
@@ -119,7 +139,7 @@ function ChatNode({ id, data, selected }) {
         {isLoading && <span className="chat-node-loading">Loading...</span>}
         <button
           className="close-btn"
-          onClick={() => data.onClose?.(id)}
+          onClick={() => callbacksRef.current.onClose?.(id)}
           title="Close node"
         >
           &#215;

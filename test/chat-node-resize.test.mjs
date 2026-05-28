@@ -22,6 +22,18 @@ test('chat nodes expose React Flow resize controls', () => {
   assert.match(chatNodeSource, /minHeight=\{420\}/)
 })
 
+test('chat nodes persist full URLs from in-page ChatGPT navigation', () => {
+  assert.match(chatNodeSource, /did-navigate-in-page/)
+  assert.match(chatNodeSource, /persistCurrentUrl/)
+  assert.match(chatNodeSource, /webview\.getURL\?\.\(\)/)
+})
+
+test('chat node URL persistence avoids repeated effect loops for unchanged URLs', () => {
+  assert.match(chatNodeSource, /currentUrlRef/)
+  assert.match(chatNodeSource, /currentUrlRef\.current === url/)
+  assert.doesNotMatch(chatNodeSource, /\}, \[id, data\]\)/)
+})
+
 test('new chat nodes start with default dimensions managed by React Flow', () => {
   assert.match(canvasStorageSource, /DEFAULT_NODE_SIZE\s*=\s*\{\s*width:\s*620,\s*height:\s*750\s*\}/s)
   assert.match(canvasStorageSource, /style:\s*DEFAULT_NODE_SIZE/)
