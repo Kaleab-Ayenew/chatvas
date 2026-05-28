@@ -30,6 +30,13 @@ const defaultEdgeOptions = {
   style: { stroke: 'var(--accent)', strokeWidth: 2 }
 }
 const proOptions = { hideAttribution: true }
+const chatServices = [
+  { id: 'chatgpt', label: 'ChatGPT', url: 'https://chatgpt.com' },
+  { id: 'claude', label: 'Claude', url: 'https://claude.ai/new' },
+  { id: 'gemini', label: 'Gemini', url: 'https://gemini.google.com/app' },
+  { id: 'deepseek', label: 'DeepSeek', url: 'https://chat.deepseek.com' },
+  { id: 'doubao', label: '豆包', url: 'https://www.doubao.com/chat' }
+]
 
 function syncIdCounters(canvasState) {
   for (const canvas of canvasState.canvases) {
@@ -312,6 +319,7 @@ function App() {
   const [recentCanvasId, setRecentCanvasId] = useState(null)
   const [renamingCanvasId, setRenamingCanvasId] = useState(null)
   const [draftCanvasName, setDraftCanvasName] = useState('')
+  const [isChatServicePickerOpen, setIsChatServicePickerOpen] = useState(false)
   const skipRenameOnBlurRef = useRef(false)
 
   const visibleCanvasIds = useMemo(() => {
@@ -429,10 +437,13 @@ function App() {
     }
   }, [canvasState.activeCanvasId])
 
-  // --- Add a fresh root ChatGPT node ---
-  const handleAddRootNode = useCallback(() => {
-    branchHandlersRef.current.get(canvasState.activeCanvasId)?.('https://chatgpt.com', null)
-  }, [canvasState.activeCanvasId])
+  const createChatForService = useCallback(
+    (service) => {
+      branchHandlersRef.current.get(canvasState.activeCanvasId)?.(service.url, null)
+      setIsChatServicePickerOpen(false)
+    },
+    [canvasState.activeCanvasId]
+  )
 
   return (
     <div className="app-container">
@@ -470,7 +481,7 @@ function App() {
             +
           </button>
         </div>
-        <button className="add-chat-btn" onClick={handleAddRootNode}>
+        <button className="add-chat-btn" onClick={() => setIsChatServicePickerOpen(true)}>
           + New Chat
         </button>
         <span className="toolbar-hint">Drag header to move. Scroll to zoom.</span>
@@ -489,6 +500,32 @@ function App() {
           ))}
         </div>
       </div>
+      {isChatServicePickerOpen && (
+        <div className="chat-service-picker" role="dialog" aria-label="Choose chat service">
+          <div className="chat-service-picker-card">
+            <div className="chat-service-picker-title">Choose chat service</div>
+            <div className="chat-service-options">
+              {chatServices.map((service) => (
+                <button
+                  key={service.id}
+                  type="button"
+                  className="chat-service-option"
+                  onClick={() => createChatForService(service)}
+                >
+                  {service.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="chat-service-cancel"
+              onClick={() => setIsChatServicePickerOpen(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {visibleCanvases.map((canvas) => (
         <div
           key={canvas.id}

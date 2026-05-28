@@ -14,6 +14,29 @@ test('App renders a canvas tab bar with create and rename controls', () => {
   assert.match(appSource, /renameCanvas/)
 })
 
+test('App defines selectable chat services for new chat nodes', () => {
+  assert.match(appSource, /chatServices\s*=\s*\[/)
+  for (const service of ['ChatGPT', 'Claude', 'Gemini', 'DeepSeek', '豆包']) {
+    assert.match(appSource, new RegExp(`label: ['"]${service}['"]`))
+  }
+  for (const url of [
+    'https://chatgpt.com',
+    'https://claude.ai/new',
+    'https://gemini.google.com/app',
+    'https://chat.deepseek.com',
+    'https://www.doubao.com/chat'
+  ]) {
+    assert.match(appSource, new RegExp(`url: ['"]${url.replaceAll('.', '\\.')}['"]`))
+  }
+})
+
+test('App renders a chat service picker before creating a new chat', () => {
+  assert.match(appSource, /isChatServicePickerOpen/)
+  assert.match(appSource, /chat-service-picker/)
+  assert.match(appSource, /createChatForService/)
+  assert.match(appSource, /setIsChatServicePickerOpen\(true\)/)
+})
+
 test('App persists canvas state with localStorage helpers', () => {
   assert.match(appSource, /loadCanvasState\(window\.localStorage\)/)
   assert.match(appSource, /saveCanvasState\(window\.localStorage,\s*canvasState\)/)
@@ -42,4 +65,10 @@ test('App styles the canvas tab bar', () => {
   assert.match(appCss, /\.canvas-tabs\s*\{/)
   assert.match(appCss, /\.canvas-tab\.active\s*\{/)
   assert.match(appCss, /\.canvas-tab-input\s*\{/)
+})
+
+test('App styles the chat service picker', () => {
+  assert.match(appCss, /\.chat-service-picker\s*\{/)
+  assert.match(appCss, /\.chat-service-option\s*\{/)
+  assert.match(appCss, /\.chat-service-cancel\s*\{/)
 })

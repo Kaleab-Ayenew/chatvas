@@ -125,6 +125,65 @@ body,
   background: var(--accent-active);
 }
 
+.chat-service-picker {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.chat-service-picker-card {
+  min-width: 280px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-toolbar);
+  box-shadow: 0 8px 32px var(--node-shadow);
+  backdrop-filter: blur(10px);
+}
+
+.chat-service-picker-title {
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.chat-service-options {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-service-option,
+.chat-service-cancel {
+  height: 34px;
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+  background: var(--btn-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chat-service-option:hover,
+.chat-service-cancel:hover {
+  border-color: var(--accent);
+}
+
+.chat-service-option {
+  text-align: left;
+  padding: 0 12px;
+}
+
+.chat-service-cancel {
+  width: 100%;
+  margin-top: 12px;
+  color: var(--text-secondary);
+}
+
 .toolbar-hint {
   font-size: 12px;
   color: var(--text-muted);
