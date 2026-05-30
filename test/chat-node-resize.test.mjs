@@ -14,6 +14,7 @@ const chatNodeCss = await readFile(
   new URL('../src/renderer/src/components/ChatNode.css', import.meta.url),
   'utf8'
 )
+const appSource = await readFile(new URL('../src/renderer/src/App.jsx', import.meta.url), 'utf8')
 
 test('chat nodes expose React Flow resize controls', () => {
   assert.match(chatNodeSource, /import\s*\{[^}]*NodeResizer[^}]*\}\s*from\s*['"]@xyflow\/react['"]/)
@@ -44,4 +45,13 @@ test('new chat nodes start with default dimensions managed by React Flow', () =>
 
 test('chat node handles stay above embedded webviews for manual connections', () => {
   assert.match(chatNodeCss, /\.chat-handle\s*\{[^}]*z-index:\s*10/s)
+})
+
+test('chat node resize gestures disable embedded webview pointer events', () => {
+  assert.match(chatNodeSource, /onResizeStart=\{data\.onResizeStart\}/)
+  assert.match(chatNodeSource, /onResizeEnd=\{data\.onResizeEnd\}/)
+  assert.match(appSource, /onResizeStart: onCanvasGestureStart/)
+  assert.match(appSource, /onResizeEnd: onCanvasGestureEnd/)
+  assert.match(appSource, /const \[isCanvasGestureActive, setIsCanvasGestureActive\] = useState\(false\)/)
+  assert.match(appSource, /className=\{isCanvasGestureActive \? 'canvas-flow-gesture-active' : undefined\}/)
 })

@@ -77,16 +77,70 @@ test('App lets users manually connect chat nodes with persisted branch-style edg
 })
 
 test('App disables webview pointer events while drawing a manual connection', () => {
-  assert.match(appSource, /const \[isConnecting, setIsConnecting\] = useState\(false\)/)
-  assert.match(appSource, /const handleConnectStart = useCallback\(\(\) => \{\s*setIsConnecting\(true\)\s*\}, \[\]\)/)
-  assert.match(appSource, /const stopConnecting = useCallback\(\(\) => \{\s*setIsConnecting\(false\)\s*\}, \[\]\)/)
-  assert.match(appSource, /onConnectStart=\{handleConnectStart\}/)
-  assert.match(appSource, /onConnectEnd=\{stopConnecting\}/)
+  assert.match(appSource, /const \[isCanvasGestureActive, setIsCanvasGestureActive\] = useState\(false\)/)
+  assert.match(appSource, /const onCanvasGestureStart = useCallback\(\(\) => \{\s*setIsCanvasGestureActive\(true\)\s*\}, \[\]\)/)
+  assert.match(appSource, /const onCanvasGestureEnd = useCallback\(\(\) => \{\s*setIsCanvasGestureActive\(false\)\s*\}, \[\]\)/)
+  assert.match(appSource, /onConnectStart=\{onCanvasGestureStart\}/)
+  assert.match(appSource, /onConnectEnd=\{onCanvasGestureEnd\}/)
   assert.match(appSource, /connectOnClick=\{false\}/)
-  assert.match(appSource, /window\.addEventListener\('mouseup', stopConnecting\)/)
-  assert.match(appSource, /window\.addEventListener\('blur', stopConnecting\)/)
-  assert.match(appSource, /canvas-flow-connecting/)
-  assert.match(appCss, /\.canvas-flow-connecting \.chat-webview\s*\{[^}]*pointer-events:\s*none/s)
+  assert.match(appSource, /window\.addEventListener\('mouseup', handleWindowMouseUp, true\)/)
+  assert.match(appSource, /window\.addEventListener\('blur', handleWindowBlur\)/)
+  assert.match(appSource, /canvas-flow-gesture-active/)
+  assert.match(appCss, /\.canvas-flow-gesture-active \.chat-webview\s*\{[^}]*pointer-events:\s*none/s)
+})
+
+test('App can detect which canvas tab is under a dragged node pointer', () => {
+  assert.match(appSource, /const canvasTabRefs = useRef\(new Map\(\)\)/)
+  assert.match(appSource, /const setCanvasTabRef = useCallback/)
+  assert.match(appSource, /const getCanvasIdAtPoint = useCallback/)
+  assert.match(appSource, /getBoundingClientRect\(\)/)
+  assert.match(appSource, /data-canvas-tab-id=\{canvas\.id\}/)
+  assert.match(appSource, /ref=\{\(element\) => setCanvasTabRef\(canvas\.id, element\)\}/)
+})
+
+test('CanvasFlow reports node drag stops so App can move nodes across canvases', () => {
+  assert.match(appSource, /onNodeDragToCanvas/)
+  assert.match(appSource, /const draggedNodeRef = useRef\(null\)/)
+  assert.match(appSource, /const handleNodeDragStart = useCallback/)
+  assert.match(appSource, /const handleNodeDrag = useCallback/)
+  assert.match(appSource, /const finishNodeDrag = useCallback/)
+  assert.match(appSource, /onNodeDragStart=\{handleNodeDragStart\}/)
+  assert.match(appSource, /onNodeDrag=\{handleNodeDrag\}/)
+  assert.match(appSource, /onNodeDragStop=\{handleNodeDragStop\}/)
+  assert.match(appSource, /onNodeDragToCanvas\?\.\(canvas\.id, draggedNode\.id, event, draggedNode\)/)
+  assert.match(appSource, /suppressNextCanvasChangeRef\.current = true/)
+})
+
+test('App moves a dragged node to a target canvas tab without creating cross-canvas edges', () => {
+  assert.match(appSource, /const moveNodeToCanvas = useCallback/)
+  assert.match(appSource, /getCanvasIdAtPoint\(event\.clientX, event\.clientY\)/)
+  assert.match(appSource, /targetCanvasId === sourceCanvasId/)
+  assert.match(appSource, /nodes: canvas\.nodes\.filter\(\(node\) => node\.id !== nodeId\)/)
+  assert.match(appSource, /nodes: \[\.\.\.canvas\.nodes, movingNode\]/)
+  assert.match(appSource, /movingNodeIds\.has\(edge\.source\) && movingNodeIds\.has\(edge\.target\)/)
+  assert.match(appSource, /activeCanvasId: targetCanvasId/)
+  assert.match(appSource, /return true/)
+})
+
+test('CanvasFlow syncs mounted local React Flow state from parent canvas updates', () => {
+  assert.match(appSource, /const lastCanvasPropsRef = useRef\(\{ nodes: canvas\.nodes, edges: canvas\.edges \}\)/)
+  assert.match(appSource, /const hydratedNodes = hydrateNodes\(canvas\.nodes\)/)
+  assert.match(appSource, /lastSyncedStateRef\.current = \{\s*nodes: hydratedNodes,\s*edges: canvas\.edges\s*\}/)
+  assert.match(appSource, /setNodes\(hydratedNodes\)/)
+  assert.match(appSource, /setEdges\(canvas\.edges\)/)
+})
+
+test('CanvasFlow avoids pushing stale local state while applying parent canvas updates', () => {
+  assert.match(appSource, /const skipCanvasChangeRef = useRef\(false\)/)
+  assert.match(appSource, /skipCanvasChangeRef\.current = true/)
+  assert.match(appSource, /if \(skipCanvasChangeRef\.current\) \{\s*skipCanvasChangeRef\.current = false\s*return\s*\}/)
+  assert.match(appSource, /lastCanvasPropsRef\.current = \{ nodes: canvas\.nodes, edges: canvas\.edges \}/)
+})
+
+test('CanvasFlow suppresses source canvas writeback after moving a node to another tab', () => {
+  assert.match(appSource, /const suppressNextCanvasChangeRef = useRef\(false\)/)
+  assert.match(appSource, /suppressNextCanvasChangeRef\.current = true/)
+  assert.match(appSource, /if \(suppressNextCanvasChangeRef\.current\) \{\s*suppressNextCanvasChangeRef\.current = false\s*return\s*\}/)
 })
 
 test('App styles the canvas tab bar', () => {

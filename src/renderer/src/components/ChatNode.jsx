@@ -117,6 +117,8 @@ function ChatNode({ id, data, selected }) {
         minHeight={420}
         lineClassName="chat-node-resize-line"
         handleClassName="chat-node-resize-handle"
+        onResizeStart={data.onResizeStart}
+        onResizeEnd={data.onResizeEnd}
       />
       <Handle type="target" position={Position.Left} className="chat-handle" />
 

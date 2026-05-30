@@ -57,11 +57,13 @@ function CanvasFlow({
   registerWebview,
   unregisterWebview,
   onCanvasChange,
-  onCanvasBranchHandlerChange
+  onCanvasBranchHandlerChange,
+  onNodeDragToCanvas
 }) {
   const handleBranchRef = useRef(null)
   const handleCloseRef = useRef(null)
   const handleUrlChangeRef = useRef(null)
+  const draggedNodeRef = useRef(null)
 
   const canvasRegisterWebview = useCallback(
     (nodeId, wcId) => registerWebview(canvas.id, nodeId, wcId),
@@ -85,6 +87,16 @@ function CanvasFlow({
     []
   )
 
+  const [isCanvasGestureActive, setIsCanvasGestureActive] = useState(false)
+
+  const onCanvasGestureStart = useCallback(() => {
+    setIsCanvasGestureActive(true)
+  }, [])
+
+  const onCanvasGestureEnd = useCallback(() => {
+    setIsCanvasGestureActive(false)
+  }, [])
+
   const hydrateNodes = useCallback(
     (storedNodes) =>
       storedNodes.map((node) => ({
@@ -95,7 +107,9 @@ function CanvasFlow({
           unregisterWebview: canvasUnregisterWebview,
           onBranch: onBranchStable,
           onClose: onCloseStable,
-          onUrlChange: onUrlChangeStable
+          onUrlChange: onUrlChangeStable,
+          onResizeStart: onCanvasGestureStart,
+          onResizeEnd: onCanvasGestureEnd
         }
       })),
     [
@@ -103,19 +117,46 @@ function CanvasFlow({
       canvasUnregisterWebview,
       onBranchStable,
       onCloseStable,
-      onUrlChangeStable
+      onUrlChangeStable,
+      onCanvasGestureStart,
+      onCanvasGestureEnd
     ]
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(hydrateNodes(canvas.nodes))
   const [edges, setEdges, onEdgesChange] = useEdgesState(canvas.edges)
-  const [isConnecting, setIsConnecting] = useState(false)
   const lastSyncedStateRef = useRef({ nodes, edges })
+  const lastCanvasPropsRef = useRef({ nodes: canvas.nodes, edges: canvas.edges })
+  const skipCanvasChangeRef = useRef(false)
+  const suppressNextCanvasChangeRef = useRef(false)
 
   useEffect(() => {
+    if (lastCanvasPropsRef.current.nodes === canvas.nodes && lastCanvasPropsRef.current.edges === canvas.edges) return
+
+    const hydratedNodes = hydrateNodes(canvas.nodes)
+    lastCanvasPropsRef.current = { nodes: canvas.nodes, edges: canvas.edges }
+    lastSyncedStateRef.current = {
+      nodes: hydratedNodes,
+      edges: canvas.edges
+    }
+    skipCanvasChangeRef.current = true
+    setNodes(hydratedNodes)
+    setEdges(canvas.edges)
+  }, [canvas.nodes, canvas.edges, hydrateNodes, setNodes, setEdges])
+
+  useEffect(() => {
+    if (skipCanvasChangeRef.current) {
+      skipCanvasChangeRef.current = false
+      return
+    }
+    if (suppressNextCanvasChangeRef.current) {
+      suppressNextCanvasChangeRef.current = false
+      return
+    }
     if (lastSyncedStateRef.current.nodes === nodes && lastSyncedStateRef.current.edges === edges) return
 
     lastSyncedStateRef.current = { nodes, edges }
+    lastCanvasPropsRef.current = { nodes, edges }
     onCanvasChange(canvas.id, nodes, edges)
   }, [canvas.id, nodes, edges, onCanvasChange])
 
@@ -177,7 +218,9 @@ function CanvasFlow({
               unregisterWebview: canvasUnregisterWebview,
               onBranch: onBranchStable,
               onClose: onCloseStable,
-              onUrlChange: onUrlChangeStable
+              onUrlChange: onUrlChangeStable,
+              onResizeStart: onCanvasGestureStart,
+              onResizeEnd: onCanvasGestureEnd
             },
             style: defaultNodeSize,
             dragHandle: '.chat-node-header'
@@ -236,23 +279,62 @@ function CanvasFlow({
     [canvas.id, setEdges]
   )
 
-  const handleConnectStart = useCallback(() => {
-    setIsConnecting(true)
+  const handleNodeDragStart = useCallback(
+    (_event, node) => {
+      draggedNodeRef.current = node
+      onCanvasGestureStart()
+    },
+    [onCanvasGestureStart]
+  )
+
+  const handleNodeDrag = useCallback((_event, node) => {
+    draggedNodeRef.current = node
   }, [])
 
-  const stopConnecting = useCallback(() => {
-    setIsConnecting(false)
-  }, [])
+  const finishNodeDrag = useCallback(
+    (event) => {
+      const draggedNode = draggedNodeRef.current
+      draggedNodeRef.current = null
+      if (!draggedNode) return
+
+      if (onNodeDragToCanvas?.(canvas.id, draggedNode.id, event, draggedNode)) {
+        suppressNextCanvasChangeRef.current = true
+      }
+    },
+    [canvas.id, onNodeDragToCanvas]
+  )
+
+  const handleNodeDragStop = useCallback(
+    (event, node) => {
+      draggedNodeRef.current = node
+      finishNodeDrag(event)
+      onCanvasGestureEnd()
+    },
+    [finishNodeDrag, onCanvasGestureEnd]
+  )
+
+  const handleWindowMouseUp = useCallback(
+    (event) => {
+      finishNodeDrag(event)
+      onCanvasGestureEnd()
+    },
+    [finishNodeDrag, onCanvasGestureEnd]
+  )
+
+  const handleWindowBlur = useCallback(() => {
+    draggedNodeRef.current = null
+    onCanvasGestureEnd()
+  }, [onCanvasGestureEnd])
 
   useEffect(() => {
-    window.addEventListener('mouseup', stopConnecting)
-    window.addEventListener('blur', stopConnecting)
+    window.addEventListener('mouseup', handleWindowMouseUp, true)
+    window.addEventListener('blur', handleWindowBlur)
 
     return () => {
-      window.removeEventListener('mouseup', stopConnecting)
-      window.removeEventListener('blur', stopConnecting)
+      window.removeEventListener('mouseup', handleWindowMouseUp, true)
+      window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [stopConnecting])
+  }, [handleWindowMouseUp, handleWindowBlur])
 
   useEffect(() => {
     onCanvasBranchHandlerChange(canvas.id, handleBranch)
@@ -271,15 +353,18 @@ function CanvasFlow({
   return (
     <ReactFlowProvider>
       <ReactFlow
-        className={isConnecting ? 'canvas-flow-connecting' : undefined}
+        className={isCanvasGestureActive ? 'canvas-flow-gesture-active' : undefined}
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodesDelete={handleNodesDelete}
         onConnect={handleConnect}
-        onConnectStart={handleConnectStart}
-        onConnectEnd={stopConnecting}
+        onConnectStart={onCanvasGestureStart}
+        onConnectEnd={onCanvasGestureEnd}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDrag={handleNodeDrag}
+        onNodeDragStop={handleNodeDragStop}
         connectOnClick={false}
         nodeTypes={nodeTypes}
         fitView={isActive}
@@ -339,6 +424,26 @@ function App() {
   // --- Webview <-> Node mapping ---
   const webContentsMapRef = useRef(new Map())
   const branchHandlersRef = useRef(new Map())
+  const canvasTabRefs = useRef(new Map())
+
+  const setCanvasTabRef = useCallback((canvasId, element) => {
+    if (element) {
+      canvasTabRefs.current.set(canvasId, element)
+    } else {
+      canvasTabRefs.current.delete(canvasId)
+    }
+  }, [])
+
+  const getCanvasIdAtPoint = useCallback((clientX, clientY) => {
+    for (const [canvasId, element] of canvasTabRefs.current.entries()) {
+      const rect = element.getBoundingClientRect()
+      if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+        return canvasId
+      }
+    }
+
+    return null
+  }, [])
 
   const registerWebview = useCallback((canvasId, nodeId, wcId) => {
     webContentsMapRef.current.set(wcId, { canvasId, nodeId })
@@ -403,6 +508,60 @@ function App() {
       branchHandlersRef.current.delete(canvasId)
     }
   }, [])
+
+  const moveNodeToCanvas = useCallback(
+    (sourceCanvasId, nodeId, event, draggedNode) => {
+      const targetCanvasId = getCanvasIdAtPoint(event.clientX, event.clientY)
+      if (!targetCanvasId || targetCanvasId === sourceCanvasId) return false
+
+      setRecentCanvasId(sourceCanvasId)
+      setCanvasState((current) => {
+        const sourceCanvas = current.canvases.find((canvas) => canvas.id === sourceCanvasId)
+        const targetCanvas = current.canvases.find((canvas) => canvas.id === targetCanvasId)
+        if (!sourceCanvas || !targetCanvas) return current
+
+        const movingNode = draggedNode || sourceCanvas.nodes.find((node) => node.id === nodeId)
+        if (!movingNode) return current
+
+        const movingNodeIds = new Set([nodeId])
+        const remainingSourceEdges = sourceCanvas.edges.filter(
+          (edge) => !movingNodeIds.has(edge.source) && !movingNodeIds.has(edge.target)
+        )
+        const movedEdges = sourceCanvas.edges.filter(
+          (edge) => movingNodeIds.has(edge.source) && movingNodeIds.has(edge.target)
+        )
+
+        const canvases = current.canvases.map((canvas) => {
+          if (canvas.id === sourceCanvasId) {
+            return {
+              ...canvas,
+              nodes: canvas.nodes.filter((node) => node.id !== nodeId),
+              edges: remainingSourceEdges
+            }
+          }
+
+          if (canvas.id === targetCanvasId) {
+            return {
+              ...canvas,
+              nodes: [...canvas.nodes, movingNode],
+              edges: [...canvas.edges, ...movedEdges]
+            }
+          }
+
+          return canvas
+        })
+
+        return {
+          ...current,
+          activeCanvasId: targetCanvasId,
+          canvases
+        }
+      })
+
+      return true
+    },
+    [getCanvasIdAtPoint]
+  )
 
   const switchCanvas = useCallback(
     (canvasId) => {
@@ -508,7 +667,9 @@ function App() {
             ) : (
               <button
                 key={canvas.id}
+                ref={(element) => setCanvasTabRef(canvas.id, element)}
                 type="button"
+                data-canvas-tab-id={canvas.id}
                 className={`canvas-tab ${canvas.id === canvasState.activeCanvasId ? 'active' : ''}`}
                 onClick={() => switchCanvas(canvas.id)}
                 onDoubleClick={() => startRenamingCanvas(canvas)}
@@ -580,6 +741,7 @@ function App() {
             unregisterWebview={unregisterWebview}
             onCanvasChange={handleCanvasChange}
             onCanvasBranchHandlerChange={handleCanvasBranchHandlerChange}
+            onNodeDragToCanvas={moveNodeToCanvas}
           />
         </div>
       ))}
