@@ -12,9 +12,23 @@ function getNativeHostStackingOrder(host) {
   return (Number.isFinite(zIndex) ? zIndex : 0) * 10000 + siblingIndex
 }
 
+function nativeBoundsKey(bounds) {
+  return [
+    bounds.x,
+    bounds.y,
+    bounds.width,
+    bounds.height,
+    bounds.contentWidth,
+    bounds.contentHeight,
+    bounds.scale,
+    bounds.stackingOrder
+  ].join(':')
+}
+
 function ChatNode({ id, data, selected }) {
   const webviewRef = useRef(null)
   const nativeHostRef = useRef(null)
+  const lastNativeBoundsKeyRef = useRef(null)
   const currentUrlRef = useRef(data.url)
   const callbacksRef = useRef(data)
   const [title, setTitle] = useState(data.label || 'Chat')
@@ -28,28 +42,61 @@ function ChatNode({ id, data, selected }) {
 
     let frameId = null
     const syncNativeBounds = () => {
+      frameId = null
       const host = nativeHostRef.current
-      if (host && window.electronAPI?.setBranchViewBounds) {
-        const rect = host.getBoundingClientRect()
-        const scale = rect.width / host.offsetWidth
-        window.electronAPI.setBranchViewBounds(data.nativeViewId, {
-          x: Math.round(rect.left),
-          y: Math.round(rect.top),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-          contentWidth: host.offsetWidth,
-          contentHeight: host.offsetHeight,
-          scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
-          stackingOrder: getNativeHostStackingOrder(host)
-        })
+      if (!host || !window.electronAPI?.setBranchViewBounds) return
+
+      const rect = host.getBoundingClientRect()
+      const scale = rect.width / host.offsetWidth
+      const bounds = {
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        contentWidth: host.offsetWidth,
+        contentHeight: host.offsetHeight,
+        scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
+        stackingOrder: getNativeHostStackingOrder(host)
       }
+      const boundsKey = nativeBoundsKey(bounds)
+      if (lastNativeBoundsKeyRef.current === boundsKey) return
+
+      lastNativeBoundsKeyRef.current = boundsKey
+      window.electronAPI.setBranchViewBounds(data.nativeViewId, bounds)
+    }
+
+    const scheduleNativeBoundsSync = () => {
+      if (frameId) return
       frameId = requestAnimationFrame(syncNativeBounds)
     }
 
-    frameId = requestAnimationFrame(syncNativeBounds)
+    const resizeObserver = new ResizeObserver(scheduleNativeBoundsSync)
+    const mutationObserver = new MutationObserver(scheduleNativeBoundsSync)
+    if (nativeHostRef.current) {
+      resizeObserver.observe(nativeHostRef.current)
+      const observedMutationTargets = [
+        nativeHostRef.current.closest('.react-flow__node'),
+        nativeHostRef.current.closest('.react-flow__viewport'),
+        nativeHostRef.current.closest('.canvas-flow-pane')
+      ]
+      observedMutationTargets.filter(Boolean).forEach((target) => {
+        mutationObserver.observe(target, {
+          attributes: true,
+          attributeFilter: ['style', 'class']
+        })
+      })
+    }
+    window.addEventListener('resize', scheduleNativeBoundsSync)
+    window.addEventListener('focus', scheduleNativeBoundsSync)
+    scheduleNativeBoundsSync()
 
     return () => {
       if (frameId) cancelAnimationFrame(frameId)
+      resizeObserver.disconnect()
+      mutationObserver.disconnect()
+      window.removeEventListener('resize', scheduleNativeBoundsSync)
+      window.removeEventListener('focus', scheduleNativeBoundsSync)
+      lastNativeBoundsKeyRef.current = null
       window.electronAPI?.setBranchViewBounds?.(data.nativeViewId, {
         x: 0,
         y: 0,

@@ -4,6 +4,18 @@ import assert from 'node:assert/strict'
 
 const mainSource = await readFile(new URL('../src/main/index.js', import.meta.url), 'utf8')
 
+test('main process disables branch debug logging by default', () => {
+  assert.match(mainSource, /CHATVAS_BRANCH_DEBUG/)
+  assert.doesNotMatch(mainSource, /appendFileSync/)
+})
+
+test('main process skips unchanged native branch view work', () => {
+  assert.match(mainSource, /lastBoundsKey/)
+  assert.match(mainSource, /const boundsChanged = entry\.lastBoundsKey !== boundsKey/)
+  assert.match(mainSource, /if \(boundsChanged\) \{[\s\S]*entry\.view\.setBounds/)
+  assert.match(mainSource, /if \(stackingChanged\) reorderBranchViews\(\)/)
+})
+
 test('main process preserves ChatGPT branch popup webContents in a native view', () => {
   assert.match(mainSource, /import \{ app, BrowserWindow, WebContentsView, ipcMain, shell \} from 'electron'/)
   assert.match(mainSource, /function isChatGptBranchUrl\(url\)/)
