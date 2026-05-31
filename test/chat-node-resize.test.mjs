@@ -79,6 +79,30 @@ test('native branch bounds include untransformed content size, canvas scale, and
   assert.match(chatNodeSource, /stackingOrder: getNativeHostStackingOrder\(host\)/)
 })
 
+test('native branch bounds sync is event-driven instead of a permanent animation loop', () => {
+  assert.match(chatNodeSource, /const scheduleNativeBoundsSync = \(\) => \{/)
+  assert.match(chatNodeSource, /new ResizeObserver\(scheduleNativeBoundsSync\)/)
+  assert.match(chatNodeSource, /new MutationObserver\(scheduleNativeBoundsSync\)/)
+  assert.doesNotMatch(
+    chatNodeSource,
+    /frameId = requestAnimationFrame\(syncNativeBounds\)[\s\S]*frameId = requestAnimationFrame\(syncNativeBounds\)/
+  )
+})
+
+test('native branch bounds sync observes React Flow viewport transforms and pane visibility', () => {
+  assert.match(chatNodeSource, /closest\('\.react-flow__viewport'\)/)
+  assert.match(chatNodeSource, /closest\('\.canvas-flow-pane'\)/)
+  assert.match(chatNodeSource, /const observedMutationTargets = \[/)
+  assert.match(chatNodeSource, /observedMutationTargets\.filter\(Boolean\)\.forEach/)
+})
+
+test('native branch bounds sync skips unchanged bounds before sending IPC', () => {
+  assert.match(chatNodeSource, /lastNativeBoundsKeyRef/)
+  assert.match(chatNodeSource, /const boundsKey = nativeBoundsKey\(bounds\)/)
+  assert.match(chatNodeSource, /if \(lastNativeBoundsKeyRef\.current === boundsKey\) return/)
+  assert.match(chatNodeSource, /lastNativeBoundsKeyRef\.current = boundsKey/)
+})
+
 test('native branch nodes resolve their React Flow stacking order from the DOM', () => {
   assert.match(chatNodeSource, /function getNativeHostStackingOrder\(host\)/)
   assert.match(chatNodeSource, /closest\('\.react-flow__node'\)/)

@@ -1,5 +1,4 @@
 import { app, BrowserWindow, WebContentsView, ipcMain, shell } from 'electron'
-import { appendFileSync } from 'fs'
 import { join } from 'path'
 
 let mainWindow
@@ -7,11 +6,13 @@ let nativeBranchViewId = 1
 const branchViews = new Map()
 
 function branchDebug(event, data = {}) {
-  const line = JSON.stringify({ time: new Date().toISOString(), event, ...data })
-  console.log(`[branch-debug] ${line}`)
-  try {
-    appendFileSync(join(app.getPath('userData'), 'branch-debug.log'), `${line}\n`)
-  } catch {}
+  if (!process.env.CHATVAS_BRANCH_DEBUG) return
+
+  console.log('[branch-debug]', { event, ...data })
+}
+
+function branchBoundsKey(bounds) {
+  return [bounds.x, bounds.y, bounds.width, bounds.height].join(':')
 }
 
 function createWindow() {
@@ -171,6 +172,7 @@ app.on('web-contents-created', (_event, contents) => {
             isDebuggerAttached: false,
             isScaleReady: false,
             lastMetricsKey: null,
+            lastBoundsKey: null,
             stackingOrder: 0
           })
 
@@ -239,19 +241,27 @@ ipcMain.handle('set-branch-view-bounds', (_event, nativeViewId, bounds) => {
   const entry = branchViews.get(nativeViewId)
   if (!entry) return
 
+  const boundsKey = branchBoundsKey(bounds)
+  const nextStackingOrder = Number.isFinite(bounds.stackingOrder) ? bounds.stackingOrder : 0
+  const boundsChanged = entry.lastBoundsKey !== boundsKey
+  const stackingChanged = entry.stackingOrder !== nextStackingOrder
+
   entry.isInBounds = bounds.width > 0 && bounds.height > 0
-  entry.stackingOrder = Number.isFinite(bounds.stackingOrder) ? bounds.stackingOrder : 0
-  entry.view.setBounds({
-    x: bounds.x,
-    y: bounds.y,
-    width: bounds.width,
-    height: bounds.height
-  })
+  entry.stackingOrder = nextStackingOrder
+  if (boundsChanged) {
+    entry.view.setBounds({
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height
+    })
+    entry.lastBoundsKey = boundsKey
+  }
   if (entry.isInBounds) {
     setNativeBranchViewScale(entry, bounds)
   }
   entry.view.setVisible(isBranchViewVisible(entry))
-  reorderBranchViews()
+  if (stackingChanged) reorderBranchViews()
 })
 
 ipcMain.handle('set-branch-views-interactive', (_event, isInteractive) => {
