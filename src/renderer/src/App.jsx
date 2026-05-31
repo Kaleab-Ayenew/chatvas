@@ -75,7 +75,7 @@ function CanvasFlow({
   )
 
   const onBranchStable = useCallback(
-    (url, sourceNodeId) => handleBranchRef.current?.(url, sourceNodeId),
+    (url, sourceNodeId, nativeViewId) => handleBranchRef.current?.(url, sourceNodeId, nativeViewId),
     []
   )
   const onCloseStable = useCallback(
@@ -188,7 +188,7 @@ function CanvasFlow({
   handleUrlChangeRef.current = handleUrlChange
 
   const handleBranch = useCallback(
-    (url, sourceNodeId) => {
+    (url, sourceNodeId, nativeViewId = null) => {
       const newId = getNextNodeId()
       const isBranch = Boolean(sourceNodeId)
 
@@ -214,6 +214,7 @@ function CanvasFlow({
             data: {
               url,
               label: isBranch ? `Branch from ${sourceNodeId}` : 'New Chat',
+              nativeViewId,
               registerWebview: canvasRegisterWebview,
               unregisterWebview: canvasUnregisterWebview,
               onBranch: onBranchStable,
@@ -335,6 +336,11 @@ function CanvasFlow({
       window.removeEventListener('blur', handleWindowBlur)
     }
   }, [handleWindowMouseUp, handleWindowBlur])
+
+  useEffect(() => {
+    if (!isActive) return
+    window.electronAPI?.setBranchViewsInteractive?.(!isCanvasGestureActive)
+  }, [isActive, isCanvasGestureActive])
 
   useEffect(() => {
     onCanvasBranchHandlerChange(canvas.id, handleBranch)
@@ -487,6 +493,10 @@ function App() {
     saveCanvasState(window.localStorage, canvasState)
   }, [canvasState])
 
+  useEffect(() => {
+    window.electronAPI?.setBranchViewsInteractive?.(!isChatServicePickerOpen)
+  }, [isChatServicePickerOpen])
+
   const handleCanvasChange = useCallback((canvasId, nodes, edges) => {
     setCanvasState((current) => {
       let changed = false
@@ -509,6 +519,11 @@ function App() {
       branchHandlersRef.current.delete(canvasId)
     }
   }, [])
+
+  const getFallbackBranchSourceNodeId = useCallback(
+    (canvasId) => canvasState.canvases.find((canvas) => canvas.id === canvasId)?.nodes[0]?.id || null,
+    [canvasState.canvases]
+  )
 
   const moveNodeToCanvas = useCallback(
     (sourceCanvasId, nodeId, event, draggedNode) => {
@@ -577,6 +592,32 @@ function App() {
     [canvasState.activeCanvasId]
   )
 
+  const closeCanvas = useCallback((canvasId) => {
+    setCanvasState((current) => {
+      if (current.canvases.length <= 1) return current
+
+      const canvasIndex = current.canvases.findIndex((canvas) => canvas.id === canvasId)
+      if (canvasIndex === -1) return current
+
+      const remainingCanvases = current.canvases.filter((canvas) => canvas.id !== canvasId)
+      const nextActiveCanvasId = canvasId === current.activeCanvasId
+        ? remainingCanvases[Math.max(0, canvasIndex - 1)].id
+        : current.activeCanvasId
+
+      return {
+        ...current,
+        activeCanvasId: nextActiveCanvasId,
+        canvases: remainingCanvases
+      }
+    })
+
+    setRecentCanvasId((current) => (current === canvasId ? null : current))
+    if (renamingCanvasId === canvasId) {
+      setRenamingCanvasId(null)
+      setDraftCanvasName('')
+    }
+  }, [renamingCanvasId])
+
   const handleAddCanvas = useCallback(() => {
     const canvas = createDefaultCanvas({
       id: getNextCanvasId(),
@@ -624,11 +665,20 @@ function App() {
   useEffect(() => {
     if (!window.electronAPI) return
 
-    window.electronAPI.onNewBranch(({ url, sourceWebContentsId }) => {
+    window.electronAPI.onNewBranch(({ url, sourceWebContentsId, nativeViewId }) => {
       const source = webContentsMapRef.current.get(sourceWebContentsId)
       const canvasId = source?.canvasId || canvasState.activeCanvasId
-      const sourceNodeId = source?.nodeId || null
-      branchHandlersRef.current.get(canvasId)?.(url, sourceNodeId)
+      const sourceNodeId = source?.nodeId || getFallbackBranchSourceNodeId(canvasId)
+      console.info('[branch-debug]', {
+        event: 'renderer-new-branch',
+        url,
+        sourceWebContentsId,
+        nativeViewId,
+        source,
+        canvasId,
+        sourceNodeId
+      })
+      branchHandlersRef.current.get(canvasId)?.(url, sourceNodeId, nativeViewId)
     })
 
     return () => {
@@ -636,7 +686,7 @@ function App() {
         window.electronAPI.removeNewBranchListener()
       }
     }
-  }, [canvasState.activeCanvasId])
+  }, [canvasState.activeCanvasId, getFallbackBranchSourceNodeId])
 
   const createChatForService = useCallback(
     (service) => {
@@ -676,7 +726,20 @@ function App() {
                 onDoubleClick={() => startRenamingCanvas(canvas)}
                 title="Double-click to rename"
               >
-                {canvas.name}
+                <span className="canvas-tab-name">{canvas.name}</span>
+                {canvasState.canvases.length > 1 && (
+                  <span
+                    className="canvas-tab-close"
+                    role="button"
+                    aria-label={`Close ${canvas.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      closeCanvas(canvas.id)
+                    }}
+                  >
+                    ×
+                  </span>
+                )}
               </button>
             )
           )}

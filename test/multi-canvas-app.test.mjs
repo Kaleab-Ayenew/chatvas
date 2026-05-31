@@ -5,13 +5,23 @@ import assert from 'node:assert/strict'
 const appSource = await readFile(new URL('../src/renderer/src/App.jsx', import.meta.url), 'utf8')
 const appCss = await readFile(new URL('../src/renderer/src/App.css', import.meta.url), 'utf8')
 
-test('App renders a canvas tab bar with create and rename controls', () => {
+test('App renders a canvas tab bar with create, rename, and close controls', () => {
   assert.match(appSource, /className="canvas-tabs"/)
   assert.match(appSource, /canvas-tab/)
   assert.match(appSource, /className="add-canvas-btn"/)
+  assert.match(appSource, /className="canvas-tab-close"/)
   assert.match(appSource, /onDoubleClick=\{[^}]*startRenamingCanvas/)
   assert.match(appSource, /onFocus=\{[^}]*\.select\(\)/)
   assert.match(appSource, /renameCanvas/)
+})
+
+test('App closes canvas tabs while keeping a neighboring canvas active', () => {
+  assert.match(appSource, /const closeCanvas = useCallback/)
+  assert.match(appSource, /current\.canvases\.length <= 1/)
+  assert.match(appSource, /current\.canvases\.filter\(\(canvas\) => canvas\.id !== canvasId\)/)
+  assert.match(appSource, /const nextActiveCanvasId = canvasId === current\.activeCanvasId/)
+  assert.match(appSource, /remainingCanvases\[Math\.max\(0, canvasIndex - 1\)\]\.id/)
+  assert.match(appSource, /onClick=\{\(event\) => \{\s*event\.stopPropagation\(\)\s*closeCanvas\(canvas\.id\)\s*\}\}/)
 })
 
 test('App defines selectable chat services for new chat nodes', () => {
@@ -44,6 +54,24 @@ test('App persists canvas state with localStorage helpers', () => {
   assert.match(appSource, /setCanvasState/)
 })
 
+test('App falls back to the active canvas node when branch source mapping is missing', () => {
+  assert.match(appSource, /const getFallbackBranchSourceNodeId = useCallback/)
+  assert.match(appSource, /source\?\.nodeId \|\| getFallbackBranchSourceNodeId\(canvasId\)/)
+  assert.doesNotMatch(appSource, /source\?\.nodeId \|\| null/)
+})
+
+test('App passes native ChatGPT branch popup IDs into branch nodes', () => {
+  assert.match(appSource, /nativeViewId/)
+  assert.match(appSource, /window\.electronAPI\.onNewBranch\(\(\{ url, sourceWebContentsId, nativeViewId \}\)/)
+  assert.match(appSource, /branchHandlersRef\.current\.get\(canvasId\)\?\.\(url, sourceNodeId, nativeViewId\)/)
+  assert.match(appSource, /nativeViewId,/)
+})
+
+test('App hides native branch views while the chat service picker is open', () => {
+  assert.match(appSource, /useEffect\(\(\) => \{[\s\S]*setBranchViewsInteractive\?\.\(!isChatServicePickerOpen\)/)
+  assert.match(appSource, /isChatServicePickerOpen/)
+})
+
 test('App avoids replacing node state when persisted URL has not changed', () => {
   assert.match(appSource, /node\.data\?\.url === url/)
   assert.match(appSource, /\? node\s*:/)
@@ -54,6 +82,12 @@ test('App keeps the most recent inactive canvas mounted for faster switching', (
   assert.match(appSource, /visibleCanvasIds/)
   assert.match(appSource, /canvas-flow-pane/)
   assert.match(appSource, /display:\s*canvas\.id === canvasState\.activeCanvasId \? 'block' : 'none'/)
+})
+
+test('App keeps the previous canvas mounted across one tab switch so native branch views stay alive', () => {
+  assert.match(appSource, /setRecentCanvasId\(canvasState\.activeCanvasId\)/)
+  assert.match(appSource, /if \(recentCanvasId && recentCanvasId !== canvasState\.activeCanvasId\) ids\.push\(recentCanvasId\)/)
+  assert.doesNotMatch(appSource, /closeBranchView.*recentCanvasId/s)
 })
 
 test('App isolates each mounted canvas with its own React Flow provider', () => {
@@ -85,6 +119,7 @@ test('App disables webview pointer events while drawing a manual connection', ()
   assert.match(appSource, /connectOnClick=\{false\}/)
   assert.match(appSource, /window\.addEventListener\('mouseup', handleWindowMouseUp, true\)/)
   assert.match(appSource, /window\.addEventListener\('blur', handleWindowBlur\)/)
+  assert.match(appSource, /setBranchViewsInteractive\?\.\(!isCanvasGestureActive\)/)
   assert.match(appSource, /canvas-flow-gesture-active/)
   assert.match(appCss, /\.canvas-flow-gesture-active \.chat-webview\s*\{[^}]*pointer-events:\s*none/s)
 })
@@ -150,6 +185,7 @@ test('App enables dragging the minimap viewport to pan the canvas', () => {
 test('App styles the canvas tab bar', () => {
   assert.match(appCss, /\.canvas-tabs\s*\{/)
   assert.match(appCss, /\.canvas-tab\.active\s*\{/)
+  assert.match(appCss, /\.canvas-tab-close\s*\{/)
   assert.match(appCss, /\.canvas-tab-input\s*\{/)
 })
 

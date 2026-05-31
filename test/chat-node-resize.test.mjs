@@ -55,3 +55,34 @@ test('chat node resize gestures disable embedded webview pointer events', () => 
   assert.match(appSource, /const \[isCanvasGestureActive, setIsCanvasGestureActive\] = useState\(false\)/)
   assert.match(appSource, /className=\{isCanvasGestureActive \? 'canvas-flow-gesture-active' : undefined\}/)
 })
+
+test('native branch nodes use a host placeholder instead of creating a new webview', () => {
+  assert.match(chatNodeSource, /data\.nativeViewId/)
+  assert.match(chatNodeSource, /native-branch-host/)
+  assert.match(chatNodeSource, /window\.electronAPI\.setBranchViewBounds/)
+  assert.doesNotMatch(chatNodeSource, /useEffect\(\(\) => \{\s*return \(\) => \{\s*if \(data\.nativeViewId && window\.electronAPI\?\.closeBranchView\)/)
+  assert.match(chatNodeSource, /if \(data\.nativeViewId\)[\s\S]*return/)
+})
+
+test('native branch views close only when users close the node', () => {
+  assert.match(chatNodeSource, /const handleCloseNode = \(\) => \{/)
+  assert.match(chatNodeSource, /window\.electronAPI\?\.closeBranchView\?\.\(data\.nativeViewId\)/)
+  assert.match(chatNodeSource, /callbacksRef\.current\.onClose\?\.\(id\)/)
+})
+
+test('native branch bounds include untransformed content size, canvas scale, and node stacking', () => {
+  assert.match(chatNodeSource, /host\.offsetWidth/)
+  assert.match(chatNodeSource, /host\.offsetHeight/)
+  assert.match(chatNodeSource, /scale: Number\.isFinite\(scale\) && scale > 0 \? scale : 1/)
+  assert.match(chatNodeSource, /contentWidth: host\.offsetWidth/)
+  assert.match(chatNodeSource, /contentHeight: host\.offsetHeight/)
+  assert.match(chatNodeSource, /stackingOrder: getNativeHostStackingOrder\(host\)/)
+})
+
+test('native branch nodes resolve their React Flow stacking order from the DOM', () => {
+  assert.match(chatNodeSource, /function getNativeHostStackingOrder\(host\)/)
+  assert.match(chatNodeSource, /closest\('\.react-flow__node'\)/)
+  assert.match(chatNodeSource, /window\.getComputedStyle\(nodeElement\)\.zIndex/)
+  assert.match(chatNodeSource, /parentElement\?\.children/)
+  assert.match(chatNodeSource, /\* 10000 \+ siblingIndex/)
+})

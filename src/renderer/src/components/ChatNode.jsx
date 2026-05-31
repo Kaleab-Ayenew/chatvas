@@ -3,17 +3,69 @@ import { Handle, NodeResizer, Position } from '@xyflow/react'
 import './ChatNode.css'
 import { trackEvent } from '../analytics'
 
+function getNativeHostStackingOrder(host) {
+  const nodeElement = host.closest('.react-flow__node')
+  const zIndex = Number.parseInt(window.getComputedStyle(nodeElement).zIndex, 10)
+  const siblingIndex = nodeElement?.parentElement?.children
+    ? Array.from(nodeElement.parentElement.children).indexOf(nodeElement)
+    : 0
+  return (Number.isFinite(zIndex) ? zIndex : 0) * 10000 + siblingIndex
+}
+
 function ChatNode({ id, data, selected }) {
   const webviewRef = useRef(null)
+  const nativeHostRef = useRef(null)
   const currentUrlRef = useRef(data.url)
   const callbacksRef = useRef(data)
   const [title, setTitle] = useState(data.label || 'Chat')
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(!data.nativeViewId)
   const [currentUrl, setCurrentUrl] = useState(data.url)
 
   callbacksRef.current = data
 
   useEffect(() => {
+    if (!data.nativeViewId) return
+
+    let frameId = null
+    const syncNativeBounds = () => {
+      const host = nativeHostRef.current
+      if (host && window.electronAPI?.setBranchViewBounds) {
+        const rect = host.getBoundingClientRect()
+        const scale = rect.width / host.offsetWidth
+        window.electronAPI.setBranchViewBounds(data.nativeViewId, {
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+          contentWidth: host.offsetWidth,
+          contentHeight: host.offsetHeight,
+          scale: Number.isFinite(scale) && scale > 0 ? scale : 1,
+          stackingOrder: getNativeHostStackingOrder(host)
+        })
+      }
+      frameId = requestAnimationFrame(syncNativeBounds)
+    }
+
+    frameId = requestAnimationFrame(syncNativeBounds)
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId)
+      window.electronAPI?.setBranchViewBounds?.(data.nativeViewId, {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        contentWidth: 0,
+        contentHeight: 0,
+        scale: 1,
+        stackingOrder: 0
+      })
+    }
+  }, [data.nativeViewId])
+
+  useEffect(() => {
+    if (data.nativeViewId) return
+
     const webview = webviewRef.current
     if (!webview) return
 
@@ -49,6 +101,7 @@ function ChatNode({ id, data, selected }) {
 
     const onDidNavigate = (event) => {
       if (event.url) {
+        console.info('[branch-debug]', { event: 'chat-node-did-navigate', nodeId: id, url: event.url })
         persistCurrentUrl(event.url)
         trackEvent('webview_navigated', {
           node_id: id,
@@ -58,7 +111,9 @@ function ChatNode({ id, data, selected }) {
     }
 
     const onDidNavigateInPage = (event) => {
-      persistCurrentUrl(event.url || webview.getURL?.())
+      const url = event.url || webview.getURL?.()
+      console.info('[branch-debug]', { event: 'chat-node-did-navigate-in-page', nodeId: id, url })
+      persistCurrentUrl(url)
     }
 
     // Direct interception of new-window requests from the webview.
@@ -66,6 +121,7 @@ function ChatNode({ id, data, selected }) {
     // tries to open a new tab/window (e.g. ChatGPT "Branch in new chat").
     const onNewWindow = (event) => {
       const url = event.url
+      console.info('[branch-debug]', { event: 'chat-node-new-window', nodeId: id, url })
       if (url && callbacksRef.current.onBranch) {
         trackEvent('branch_requested', {
           node_id: id,
@@ -98,15 +154,23 @@ function ChatNode({ id, data, selected }) {
   }, [id])
 
   const handleBack = () => {
+    if (data.nativeViewId) return
     if (webviewRef.current?.canGoBack()) webviewRef.current.goBack()
   }
 
   const handleForward = () => {
+    if (data.nativeViewId) return
     if (webviewRef.current?.canGoForward()) webviewRef.current.goForward()
   }
 
   const handleReload = () => {
+    if (data.nativeViewId) return
     webviewRef.current?.reload()
+  }
+
+  const handleCloseNode = () => {
+    window.electronAPI?.closeBranchView?.(data.nativeViewId)
+    callbacksRef.current.onClose?.(id)
   }
 
   return (
@@ -141,7 +205,7 @@ function ChatNode({ id, data, selected }) {
         {isLoading && <span className="chat-node-loading">Loading...</span>}
         <button
           className="close-btn"
-          onClick={() => callbacksRef.current.onClose?.(id)}
+          onClick={handleCloseNode}
           title="Close node"
         >
           &#215;
@@ -155,14 +219,18 @@ function ChatNode({ id, data, selected }) {
 
       {/* Webview body */}
       <div className="chat-node-body">
-        <webview
-          ref={webviewRef}
-          src={data.url}
-          partition="persist:chatgpt"
-          className="chat-webview"
-          allowpopups="true"
-        />
-        {isLoading && (
+        {data.nativeViewId ? (
+          <div ref={nativeHostRef} className="native-branch-host" />
+        ) : (
+          <webview
+            ref={webviewRef}
+            src={data.url}
+            partition="persist:chatgpt"
+            className="chat-webview"
+            allowpopups="true"
+          />
+        )}
+        {isLoading && !data.nativeViewId && (
           <div className="chat-node-loading-overlay">
             <div className="loading-spinner" />
           </div>
