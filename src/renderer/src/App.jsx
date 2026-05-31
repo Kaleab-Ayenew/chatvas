@@ -380,6 +380,7 @@ function CanvasFlow({
           maskColor="var(--minimap-mask)"
           style={{ backgroundColor: 'var(--minimap-bg)' }}
           position="bottom-left"
+          pannable
         />
       </ReactFlow>
     </ReactFlowProvider>

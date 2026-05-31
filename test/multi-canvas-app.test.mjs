@@ -143,6 +143,10 @@ test('CanvasFlow suppresses source canvas writeback after moving a node to anoth
   assert.match(appSource, /if \(suppressNextCanvasChangeRef\.current\) \{\s*suppressNextCanvasChangeRef\.current = false\s*return\s*\}/)
 })
 
+test('App enables dragging the minimap viewport to pan the canvas', () => {
+  assert.match(appSource, /<MiniMap[\s\S]*position="bottom-left"[\s\S]*pannable/)
+})
+
 test('App styles the canvas tab bar', () => {
   assert.match(appCss, /\.canvas-tabs\s*\{/)
   assert.match(appCss, /\.canvas-tab\.active\s*\{/)
